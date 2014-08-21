@@ -15,7 +15,6 @@ module PhpFpmDocker
 
       # Create log dir if needed
       log_dir = Pathname.new('/var/log/php_fpm_docker')
-
       FileUtils.mkdir_p log_dir unless log_dir.directory?
 
       # Open logger
@@ -35,8 +34,24 @@ module PhpFpmDocker
         @logger.fatal(to_s) { "Error while init: #{e.message}" }
         exit 1
       end
+    end
 
-      init_pools
+    def run
+      pid = fork do
+        Signal.trap('USR1') do
+          @logger.info(to_s) { 'Signal USR1 received reloading now' }
+        end
+        Signal.trap('TERM') do
+          @logger.info(to_s) { 'Signal TERM received stopping me now' }
+          sleep 3
+          exit 0
+        end
+        while true
+          sleep 5
+        end
+      end
+      Process.detach(pid)
+      pid
     end
 
     def init_pools

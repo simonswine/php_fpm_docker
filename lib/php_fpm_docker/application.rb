@@ -24,7 +24,7 @@ module PhpFpmDocker
 
       if running?
         puts 'already running'
-        exit 0
+        return 0
       end
 
       # init
@@ -34,6 +34,7 @@ module PhpFpmDocker
       self.pid = l.run
 
       puts "done (pid=#{pid})"
+      return 0
     end
 
     def stop
@@ -42,16 +43,25 @@ module PhpFpmDocker
 
       unless running?
         puts 'not running'
-        exit 0
+        return 0
       end
 
       Process.kill('TERM', pid)
 
-      while running?
+      count = 0
+      while running? and count <= 50
         sleep 0.2
+        count += 1
       end
 
-      puts 'stopped'
+      if running?
+        puts 'still running'
+        return 1
+      else
+        self.pid=nil
+        puts 'stopped'
+        return 0
+      end
     end
 
     def status
@@ -60,19 +70,30 @@ module PhpFpmDocker
 
       if running?
         puts 'running'
-        exit 0
+        return 0
       else
         puts 'not running'
-        exit 3
+        return 3
       end
     end
 
     def reload
-      puts 'TODO: reload'
+      print "Reloading #{full_name}: "
+      $stdout.flush
+
+      unless running?
+        puts 'not running'
+        return 0
+      end
+
+      Process.kill('USR1', pid)
+      puts 'done'
+      return 0
     end
 
     def restart
-      stop
+      ret_val = stop
+      return ret_val if ret_val != 0
       start
     end
 
@@ -93,7 +114,7 @@ module PhpFpmDocker
 
         @logger.info(@php_name) { "calling method #{method_to_call}" }
 
-        send(method_to_call)
+        exit send(method_to_call)
 
       rescue RuntimeError => e
         @logger.warn(@php_name) { e.message }
@@ -132,8 +153,15 @@ module PhpFpmDocker
     end
 
     def pid=(pid)
-      File.open pid_file, 'w' do |f|
-        f.write pid
+      if pid.nil?
+        begin
+          File.unlink pid_file
+        rescue Errno::ENOENT
+        end
+      else
+        File.open pid_file, 'w' do |f|
+          f.write pid
+        end
       end
     end
 

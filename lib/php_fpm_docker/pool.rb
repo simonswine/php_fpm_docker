@@ -7,29 +7,9 @@ module PhpFpmDocker
   # A pool represent a single isolatet php web instance
   class Pool
     def initialize(opts)
-      @config_path = opts[:config_path]
+      @config = opts[:config]
       @launcher = opts[:launcher]
-
-      parse_config
-
-      start
-    end
-
-    def parse_config
-      fail "Config file '#{@config_path}' not found" \
-      unless @config_path.file?
-      fail "Config file '#{@config_path}' not readable" \
-      unless @config_path.readable?
-
-      @ini_file = IniFile.load(@config_path)
-
-      @ini_file.each_section do |section|
-        @name = section
-        @config = @ini_file[section]
-
-        # TODO: Split pools earlier
-        break
-      end
+      @name = opts[:name]
     end
 
     def docker_create_opts
@@ -114,6 +94,7 @@ module PhpFpmDocker
     end
 
     def start
+      return unless enabled?
       create_opts = docker_create_opts
       create_opts['Cmd'] = spawn_command + ['--'] + php_command
 
@@ -121,8 +102,30 @@ module PhpFpmDocker
       @container.start(docker_start_opts)
     end
 
+    def check
+      #TODO Implement check
+    end
+
+    def stop
+      return unless enabled?
+      @container.delete(force: true) unless @container.nil?
+    end
+
     def to_s
       "<Pool:#{@name}>"
     end
+
+    def enable
+      @enabled = true
+    end
+
+    def disable
+      @enabled = false
+    end
+
+    def enabled?
+      @enabled ||= true
+    end
+
   end
 end

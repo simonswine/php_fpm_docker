@@ -4,6 +4,7 @@ require 'inifile'
 require 'pp'
 require 'logger'
 require 'docker'
+require 'digest'
 
 module PhpFpmDocker
   # Represent a single docker image
@@ -37,31 +38,94 @@ module PhpFpmDocker
     end
 
     def run
+
+      start_pools
+
       pid = fork do
         Signal.trap('USR1') do
           @logger.info(to_s) { 'Signal USR1 received reloading now' }
+          reload_pools
         end
         Signal.trap('TERM') do
           @logger.info(to_s) { 'Signal TERM received stopping me now' }
-          sleep 3
+          stop_pools
           exit 0
         end
         while true
-          sleep 5
+          sleep 1
         end
       end
       Process.detach(pid)
       pid
     end
 
-    def init_pools
-      @pools = []
-      list_pool_configs.each do |pool|
-        @pools << Pool.new(
-            config_path: pool,
-            launcher: self
-        )
+    def start_pools
+      @pools = {}
+      reload_pools
+    end
+
+    def stop_pools
+      reload_pools({})
+    end
+
+    def create_missing_pool_objects
+      (@pools.keys & @pools_old.keys).each do |hash|
+        @pools[hash][:object] = @pools_old[hash][:object]
       end
+    end
+
+    def move_existing_pool_objects
+      @pools.keys.each do |hash|
+        pool = @pools[hash]
+        if not pool.has_key?(:object)
+          pool[:object] = Pool.new({
+            :config => pool[:config],
+            :name => pool[:name],
+            :launcher => self
+          })
+        end
+      end
+    end
+
+    def reload_pools (pools = nil)
+      @pools_old = @pools
+      if pools.nil?
+        @pools = pools_from_config
+      else
+        @pools = pools
+      end
+
+      move_existing_pool_objects
+      create_missing_pool_objects
+
+      # Pools to stop
+      pools_action(@pools_old, @pools_old.keys - @pools.keys, :stop)
+
+      # Pools to start
+      pools_action(@pools, @pools.keys - @pools_old.keys, :start)
+    end
+
+    def check_pools
+      pools_action(@pools,@pools.keys, :check)
+    end
+
+    def pools_action (pools, pools_hashes,action)
+      message = ""
+      if pools_hashes.length > 0
+        message << "Pools to #{action}: "
+        message <<  pools_hashes.map {|p| pools[p][:name] }.join(', ')
+        pools_hashes.each do |pool_hash|
+          pool = pools[pool_hash]
+          begin
+            pool[:object].send(action)
+          rescue ::Exception => e
+            @logger.info(pool[:object].to_s) { "Failed to #{action}: #{e.message}" }
+          end
+        end
+      else
+        message << "No pools to #{action}"
+      end
+      @logger.info(to_s) { message }
     end
 
     def test_directories
@@ -112,15 +176,57 @@ module PhpFpmDocker
       }
     end
 
-    def list_pool_configs
-      Dir[@pools_directory.join('*.conf').to_s].map { |f| Pathname.new f }
+    # Reads config sections from a inifile
+    def pools_config_content_from_file(config_path)
+      ini_file = IniFile.load(config_path)
+
+      ret_val = []
+      ini_file.each_section do |section|
+        ret_val << [section, ini_file[section]]
+      end
+      ret_val
+    end
+
+    # Merges config sections form all inifiles
+    def pools_config_contents
+      ret_val = []
+
+      # Loop over
+      Dir[@pools_directory.join('*.conf').to_s].each do |config_path|
+        ret_val += pools_config_content_from_file(config_path)
+      end
+      ret_val
+    end
+
+    # Hashes configs to detect changes
+    def pools_from_config
+      configs = {}
+
+      pools_config_contents.each do |section|
+        # Hash section name and content
+        d = Digest::SHA2.new(bitlen = 256)
+        hash = d.reset.update(section[0]).update(section[1].to_s).to_s
+
+        configs[hash] = {
+          :name => section[0],
+          :config => section[1],
+        }
+      end
+      configs
     end
 
     # Docker init
     def test_docker_cmd(cmd) # rubocop:disable MethodLength
+
+      # retry this block 3 times
+      tries ||= 3
+
       opts = docker_opts
       opts['Cmd'] = cmd
       dict = {}
+
+      # Set timeout
+      Docker.options[:read_timeout] = 2
 
       cont = Docker::Container.create(opts)
       cont.start
@@ -131,12 +237,22 @@ module PhpFpmDocker
       dict[:stdout] = output[0].first
       dict[:stderr] = output[1].first
 
+      # Set timeout
+      Docker.options[:read_timeout] = 15
+
       @logger.debug(to_s) do
         "cmd=#{cmd.join(' ')} ret_val=#{dict[:ret_val]}" \
         " stdout=#{dict[:stdout]} stderr=#{dict[:stderr]}"
       end
 
       dict
+    rescue Docker::Error::TimeoutError => e
+      if (tries -= 1) > 0
+        cont.delete(force: true) if cont.nil?
+        @logger.debug(to_s) { 'ran into timeout retry'}
+        retry
+      end
+      raise e
     end
 
     # Testing the docker image if i can be used
@@ -146,6 +262,7 @@ module PhpFpmDocker
         result = test_docker_cmd [:which, php_cmd]
 
         next unless result[:ret_val] == 0
+
 
         php_cmd_path = result[:stdout].strip
 

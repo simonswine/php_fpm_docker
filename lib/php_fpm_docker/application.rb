@@ -259,13 +259,8 @@ eos
       "#{@@longname} '#{@php_name}'"
     end
 
-    # Get scriptname from argv[0]
-    def script_name
-      File.basename($PROGRAM_NAME)
-    end
-
     def pid_file
-      File.join('/var/run/', "#{script_name}.run")
+      File.join('/var/run/', "#{@@name}_#{@php_name}.run")
     end
 
     def pid

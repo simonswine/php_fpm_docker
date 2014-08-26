@@ -1,7 +1,4 @@
 #!/usr/bin/env ruby
 # coding: utf-8
-# TODO devstuff
-$LOAD_PATH.unshift File.absolute_path(File.join(File.dirname(File.readlink(__FILE__)), '../lib'))
-
 require 'php_fpm_docker/application'
 PhpFpmDocker::Application.new.run

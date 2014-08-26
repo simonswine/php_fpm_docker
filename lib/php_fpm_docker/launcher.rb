@@ -269,7 +269,7 @@ module PhpFpmDocker
         result = test_docker_cmd [php_cmd_path, '-v']
 
         next unless result[:ret_val] == 0
-        next if /PHP \d+\.\d+\.\d+ \(cgi-fcgi\)/.match(result[:stdout]).nil?
+        next if /PHP [A-Za-z0-9\.\-\_]+ \(cgi-fcgi\)/.match(result[:stdout]).nil?
 
         @php_cmd_path = php_cmd_path
         break

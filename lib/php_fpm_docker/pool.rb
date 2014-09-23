@@ -35,7 +35,7 @@ module PhpFpmDocker
     end
 
     def bind_mounts # rubocop:disable MethodLength
-      ret_val = []
+      ret_val = @launcher.bind_mounts
       ret_val << File.dirname(@config['listen'])
 
       @config['php_admin_value[open_basedir]'].split(':').each do |dir|

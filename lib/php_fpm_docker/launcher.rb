@@ -145,6 +145,11 @@ module PhpFpmDocker
       "<Launcher:#{@name}>"
     end
 
+    # Get neccessary bind mounts
+    def bind_mounts
+      @ini_file[:main]['bind_mounts'].split(',') || []
+    end
+
     # Parse the config file for all pools
     def parse_config # rubocop:disable MethodLength
       # Test for file usability

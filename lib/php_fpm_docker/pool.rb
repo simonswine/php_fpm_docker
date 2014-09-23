@@ -34,15 +34,21 @@ module PhpFpmDocker
       }
     end
 
+    # Return web path regexs
+    def web_path_regex
+        [
+          %r{(^#{@launcher.web_path}/clients/client\d+/web\d+)},
+          %r{(^#{@launcher.web_path}/[^/]+)/web$}
+        ]
+    end
+
+    # Find out bind mount paths
     def bind_mounts # rubocop:disable MethodLength
       ret_val = @launcher.bind_mounts
       ret_val << File.dirname(@config['listen'])
 
       @config['php_admin_value[open_basedir]'].split(':').each do |dir|
-        [
-          %r{(^/var/www/clients/client\d+/web\d+)},
-          %r{(^/var/www/[^/]+)/web$}
-        ].each do |regex|
+        web_path_regex.each do |regex|
           m = regex.match(dir)
           ret_val << m[1] unless m.nil?
         end

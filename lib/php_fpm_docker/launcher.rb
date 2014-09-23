@@ -150,6 +150,11 @@ module PhpFpmDocker
       @ini_file[:main]['bind_mounts'].split(',') || []
     end
 
+    # Get webs base path
+    def web_path
+      Pathname.new(@ini_file[:main]['web_path'] || '/var/www')
+    end
+
     # Parse the config file for all pools
     def parse_config # rubocop:disable MethodLength
       # Test for file usability

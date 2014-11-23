@@ -17,3 +17,4 @@ AllCops:
   Exclude:
     - 'Rakefile'
     - 'spec/**/*'
+    - 'vendor/**/*'

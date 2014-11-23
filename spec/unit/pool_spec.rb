@@ -163,7 +163,7 @@ describe PhpFpmDocker::Pool do
         allow(dbl_c).to receive(:create).with(hash_including('Image' => 'deadbeef')).and_return(dbl_c_inst)
 
         p.start
-        expect(p.enabled?).to eq(true)
+        expect(p.enabled).to eq(true)
       end
     end
     describe "#stop" do
@@ -173,12 +173,12 @@ describe PhpFpmDocker::Pool do
         allow(dbl_c_inst).to receive(:delete).with(hash_including(force: true))
         p.instance_variable_set(:@container, dbl_c_inst)
         p.stop
-        expect(p.enabled?).to eq(false)
+        expect(p.enabled).to eq(false)
       end
       it "doesn't stop non-existing container" do
         p.instance_variable_set(:@container, nil)
         p.stop
-        expect(p.enabled?).to eq(false)
+        expect(p.enabled).to eq(false)
       end
     end
     describe "#container_running?" do

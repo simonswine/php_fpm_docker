@@ -38,7 +38,6 @@ module PhpFpmDocker
     end
 
     def run
-
       start_pools
 
       pid = fork do
@@ -51,7 +50,7 @@ module PhpFpmDocker
           stop_pools
           exit 0
         end
-        while true
+        Kernel.loop do
           sleep 1
         end
       end
@@ -77,17 +76,17 @@ module PhpFpmDocker
     def move_existing_pool_objects
       @pools.keys.each do |hash|
         pool = @pools[hash]
-        if not pool.has_key?(:object)
-          pool[:object] = Pool.new({
-            :config => pool[:config],
-            :name => pool[:name],
-            :launcher => self
-          })
-        end
+        # skip if there's already an object
+        next if pool.key?(:object)
+        pool[:object] = Pool.new(
+          config: pool[:config],
+          name: pool[:name],
+          launcher: self
+        )
       end
     end
 
-    def reload_pools (pools = nil)
+    def reload_pools(pools = nil)
       @pools_old = @pools
       if pools.nil?
         @pools = pools_from_config
@@ -106,20 +105,22 @@ module PhpFpmDocker
     end
 
     def check_pools
-      pools_action(@pools,@pools.keys, :check)
+      pools_action(@pools, @pools.keys, :check)
     end
 
-    def pools_action (pools, pools_hashes,action)
-      message = ""
+    def pools_action(pools, pools_hashes, action)
+      message = ''
       if pools_hashes.length > 0
         message << "Pools to #{action}: "
-        message <<  pools_hashes.map {|p| pools[p][:name] }.join(', ')
+        message <<  pools_hashes.map { |p| pools[p][:name] }.join(', ')
         pools_hashes.each do |pool_hash|
           pool = pools[pool_hash]
           begin
             pool[:object].send(action)
-          rescue ::Exception => e
-            @logger.info(pool[:object].to_s) { "Failed to #{action}: #{e.message}" }
+          rescue => e
+            @logger.info(pool[:object].to_s) do
+              "Failed to #{action}: #{e.message}"
+            end
           end
         end
       else
@@ -214,12 +215,12 @@ module PhpFpmDocker
 
       pools_config_contents.each do |section|
         # Hash section name and content
-        d = Digest::SHA2.new(bitlen = 256)
+        d = Digest::SHA2.new(256)
         hash = d.reset.update(section[0]).update(section[1].to_s).to_s
 
         configs[hash] = {
-          :name => section[0],
-          :config => section[1],
+          name: section[0],
+          config: section[1]
         }
       end
       configs
@@ -227,7 +228,6 @@ module PhpFpmDocker
 
     # Docker init
     def test_docker_cmd(cmd) # rubocop:disable MethodLength
-
       # retry this block 3 times
       tries ||= 3
 
@@ -259,7 +259,7 @@ module PhpFpmDocker
     rescue Docker::Error::TimeoutError => e
       if (tries -= 1) > 0
         cont.delete(force: true) if cont.nil?
-        @logger.debug(to_s) { 'ran into timeout retry'}
+        @logger.debug(to_s) { 'ran into timeout retry' }
         retry
       end
       raise e
@@ -273,13 +273,13 @@ module PhpFpmDocker
 
         next unless result[:ret_val] == 0
 
-
         php_cmd_path = result[:stdout].strip
 
         result = test_docker_cmd [php_cmd_path, '-v']
 
         next unless result[:ret_val] == 0
-        next if /PHP [A-Za-z0-9\.\-\_]+ \(cgi-fcgi\)/.match(result[:stdout]).nil?
+        php_version_re = /PHP [A-Za-z0-9\.\-\_]+ \(cgi-fcgi\)/
+        next if php_version_re.match(result[:stdout]).nil?
 
         @php_cmd_path = php_cmd_path
         break

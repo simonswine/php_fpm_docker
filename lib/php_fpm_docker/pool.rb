@@ -36,10 +36,10 @@ module PhpFpmDocker
 
     # Return web path regexs
     def web_path_regex
-        [
-          %r{(^#{@launcher.web_path}/clients/client\d+/web\d+)},
-          %r{(^#{@launcher.web_path}/[^/]+)/web$}
-        ]
+      [
+        %r{(^#{@launcher.web_path}/clients/client\d+/web\d+)},
+        %r{(^#{@launcher.web_path}/[^/]+)/web$}
+      ]
     end
 
     # Find out bind mount paths
@@ -109,7 +109,7 @@ module PhpFpmDocker
     end
 
     def check
-      #TODO Implement check
+      # TODO: Implement check
     end
 
     def stop
@@ -132,6 +132,5 @@ module PhpFpmDocker
     def enabled?
       @enabled ||= true
     end
-
   end
 end

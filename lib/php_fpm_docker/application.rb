@@ -6,8 +6,8 @@ require 'logger'
 module PhpFpmDocker
   # Application that is used as init script
   class Application
-    @@name = 'php_fpm_docker'
-    @@longname = 'PHP FPM Docker Wrapper'
+    @name = 'php_fpm_docker'
+    @longname = 'PHP FPM Docker Wrapper'
     def initialize
       # Create log dir if needed
       log_dir = Pathname.new('/var/log/php_fpm_docker')
@@ -18,13 +18,13 @@ module PhpFpmDocker
       @logger = Logger.new(log_file, 'daily')
     end
 
-    def install
-
+    def install # rubocop:disable MethodLength, CyclomaticComplexity, PerceivedComplexity, LineLength,  AbcSize
       # Get launcher name
       begin
-        puts "Enter name of the php docker launcher instance:"
+        puts 'Enter name of the php docker launcher instance:'
         name = $stdin.gets.chomp
-        raise "Only use these characters: a-z0-9-_." unless /^[a-z0-9\.\-_]+$/.match(name)
+        fail 'Only use these characters: a-z0-9-_.' \
+          unless /^[a-z0-9\.\-_]+$/.match(name)
       rescue RuntimeError =>  e
         $stderr.puts(e.message)
         retry
@@ -32,9 +32,10 @@ module PhpFpmDocker
 
       # Get image name
       begin
-        puts "Enter name of the docker image to use:"
+        puts 'Enter name of the docker image to use:'
         image = $stdin.gets.chomp
-        raise "Only use these characters: a-z0-9-_./:" unless /^[a-z0-9\.\-_\/\:]+$/.match(name)
+        fail 'Only use these characters: a-z0-9-_./:' \
+          unless /^[a-z0-9\.\-_\/\:]+$/.match(name)
       rescue RuntimeError =>  e
         $stderr.puts(e.message)
         retry
@@ -46,14 +47,20 @@ module PhpFpmDocker
       begin
         ENV['PATH'].split(':').each  do |folder|
           path = File.join(folder, bin_name)
-          if File.exists? path
+          if File.exist? path
             bin_path = path
             break
           end
         end
 
         if bin_path.nil?
-         bin_path = File.expand_path(File.join(File.dirname(__FILE__),'..','..','bin',bin_name))
+          bin_path = File.expand_path(File.join(
+            File.dirname(__FILE__),
+            '..',
+            '..',
+            'bin',
+            bin_name
+          ))
         end
 
       rescue RuntimeError =>  e
@@ -92,23 +99,23 @@ DAEMON=#{bin_path}
 case "$1" in
     start)
   $DAEMON $NAME start
-	;;
+  ;;
     stop)
   $DAEMON $NAME stop
-	;;
+  ;;
     reload)
   $DAEMON $NAME reload
-	;;
+  ;;
     status)
   $DAEMON $NAME status
-	;;
+  ;;
     restart|force-reload)
   $DAEMON $NAME restart
-	;;
+  ;;
   *)
-	echo "Usage: $0 {start|stop|status|restart|force-reload|reload}" >&2
-	exit 1
-	;;
+  echo "Usage: $0 {start|stop|status|restart|force-reload|reload}" >&2
+  exit 1
+  ;;
 esac
 
 
@@ -119,11 +126,11 @@ eos
       end
       File.chmod(0755, initd_path)
 
-      if not config_dir.exist?
+      unless config_dir.exist?
         puts "Creating config directory '#{config_dir}'"
         FileUtils.mkdir_p config_dir
       end
-      if not config_pool.exist?
+      unless config_pool.exist?
         puts "Creating pools directory '#{config_pool}'"
         FileUtils.mkdir_p config_pool
       end
@@ -132,8 +139,7 @@ eos
         file.write(config_content)
       end
 
-      return 0
-
+      0
     end
 
     def start
@@ -152,7 +158,7 @@ eos
       self.pid = l.run
 
       puts "done (pid=#{pid})"
-      return 0
+      0
     end
 
     def stop
@@ -167,7 +173,7 @@ eos
       Process.kill('TERM', pid)
 
       count = 0
-      while running? and count <= 50
+      while running? && count <= 50
         sleep 0.2
         count += 1
       end
@@ -176,7 +182,7 @@ eos
         puts 'still running'
         return 1
       else
-        self.pid=nil
+        self.pid = nil
         puts 'stopped'
         return 0
       end
@@ -206,7 +212,7 @@ eos
 
       Process.kill('USR1', pid)
       puts 'done'
-      return 0
+      0
     end
 
     def restart
@@ -215,9 +221,7 @@ eos
       start
     end
 
-    def run
-
-
+    def run # rubocop:disable AbcSize
       # allowed arguments
       allowed_methods = public_methods(false)
       allowed_methods.delete(:run)
@@ -229,16 +233,15 @@ eos
         fail 'no argument' if ARGV.first.nil?
 
         # install mode
-        if ARGV.first == 'install'
-          exit install
-        end
+        exit install if ARGV.first == 'install'
 
         # get correct php name
         @php_name = ARGV.first
 
         method_to_call = ARGV[1].to_sym
 
-        fail "unknown method #{ARGV[1]}" unless allowed_methods.include?(method_to_call)
+        fail "unknown method #{ARGV[1]}" \
+          unless allowed_methods.include?(method_to_call)
 
         @logger.info(@php_name) { "calling method #{method_to_call}" }
 
@@ -246,7 +249,9 @@ eos
 
       rescue RuntimeError => e
         @logger.warn(@php_name) { e.message }
-        $stderr.puts("Usage: #{script_name} $NAME {#{allowed_methods.join '|'}}")
+        $stderr.puts(
+          "Usage: #{script_name} $NAME {#{allowed_methods.join '|'}}"
+        )
         $stderr.puts("       #{script_name} install")
 
         exit 3
@@ -254,13 +259,14 @@ eos
     end
 
     private
+
     # Get php name from scriptname
     def full_name
-      "#{@@longname} '#{@php_name}'"
+      "#{@longname} '#{@php_name}'"
     end
 
     def pid_file
-      File.join('/var/run/', "#{@@name}_#{@php_name}.run")
+      File.join('/var/run/', "#{@name}_#{@php_name}.run")
     end
 
     def pid
@@ -273,6 +279,7 @@ eos
         begin
           File.unlink pid_file
         rescue Errno::ENOENT
+          @logger.debug("No pid file found: #{pid_file}")
         end
       else
         File.open pid_file, 'w' do |f|

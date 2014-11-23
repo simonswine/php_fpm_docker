@@ -12,3 +12,8 @@ Metrics/ClassLength:
 
 Metrics/AbcSize:
   Max: 35
+
+AllCops:
+  Exclude:
+    - 'Rakefile'
+    - 'spec/**/*'

@@ -2,6 +2,7 @@
 require 'pp'
 require 'inifile'
 require 'docker'
+require 'securerandom'
 
 module PhpFpmDocker
   # A pool represent a single isolated PHP web instance
@@ -20,6 +21,7 @@ module PhpFpmDocker
       end
 
       {
+        'name' => container_name,
         'Image' => @launcher.docker_image.id,
         'Volumes' => volumes,
         'WorkingDir' => '/'
@@ -134,6 +136,10 @@ module PhpFpmDocker
 
       @container = Docker::Container.create(create_opts)
       @container.start(docker_start_opts)
+    end
+
+    def container_name
+      @container_name ||= "#{@name}_#{SecureRandom.hex[0..11]}"
     end
 
     def container_running?

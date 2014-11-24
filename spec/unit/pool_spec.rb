@@ -215,6 +215,24 @@ describe PhpFpmDocker::Pool do
         expect(p.enabled).to eq(false)
       end
     end
+    describe "#container_name" do
+      let(:method) {
+        p.instance_variable_set(:@name, 'myname')
+        p.container_name
+      }
+      it '@container_name not set' do
+        p.instance_variable_set(:@container_name, nil)
+        name = method
+        expect(name).to a_string_matching(/^myname_[a-f0-9]+$/)
+        expect(p.instance_variable_get(:@container_name)).to eq (name)
+      end
+      it '@container_name set' do
+        p.instance_variable_set(:@container_name, 'myname_cafe')
+        name = method
+        expect(name).to eq ('myname_cafe')
+        expect(p.instance_variable_get(:@container_name)).to eq (name)
+      end
+    end
     describe "#container_running?" do
       it "container is nil" do
         expect(p.container_running?).to eq(false)

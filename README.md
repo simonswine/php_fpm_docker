@@ -6,6 +6,8 @@ TODO: Write a gem description
 
 * Travis (RSpec & RuboCup)
 [![Build Status](https://travis-ci.org/simonswine/php_fpm_docker.svg?branch=master)](https://travis-ci.org/simonswine/php_fpm_docker)
+* Coveralls
+[![Coverage Status](https://img.shields.io/coveralls/simonswine/php_fpm_docker.svg)](https://coveralls.io/r/simonswine/php_fpm_docker)
 
 ## Topology
 

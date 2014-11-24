@@ -45,8 +45,8 @@ describe PhpFpmDocker::Pool do
 
   # Mock Docker
   before (:example){
-    class_double('Docker').as_stubbed_const()
-    class_double('Docker::Container').as_stubbed_const()
+    @dbl_docker = class_double('Docker').as_stubbed_const()
+    @dbl_docker_container = class_double('Docker::Container').as_stubbed_const()
   }
 
   # Mock launcher
@@ -95,17 +95,22 @@ describe PhpFpmDocker::Pool do
       expect(p.listen_gid).to eq(1001)
     end
     describe "#spawn_command" do
-      let (:cmd) {
-        p.spawn_command
+      before (:example) {
+        @list = p.spawn_command
       }
-      it "not raise error" do
-          expect{cmd}.not_to raise_error
+      it 'list include spawn_fcgi' do
+          expect(@list).to include(LAUNCHER_SPAWN_FCGI)
       end
-      it "include spawn_fcgi" do
-          expect(cmd).to include(LAUNCHER_SPAWN_FCGI)
+      it 'list include socket path' do
+          expect(@list).to include(default_config['listen'])
       end
-      it "include socket path" do
-          expect(cmd).to include(default_config['listen'])
+      it 'list is flat' do
+        expect(@list.flatten).to eq(@list)
+      end
+      it 'list is string only' do
+        @list.each do |elem|
+          expect(elem).to be_a(String)
+        end
       end
     end
     describe "#bind_mounts" do
@@ -131,14 +136,19 @@ describe PhpFpmDocker::Pool do
       end
     end
     describe "#php_command" do
-      let (:php_command) {
-        p.php_command
+      before (:example) {
+        @list = p.php_command
       }
-      it "not raise error" do
-          expect{php_command}.not_to raise_error
+      it 'list include php cmd' do
+          expect(@list).to include(LAUNCHER_PHP)
       end
-      it "include php" do
-          expect(php_command).to include(LAUNCHER_PHP)
+      it 'list is flat' do
+        expect(@list.flatten).to eq(@list)
+      end
+      it 'list is string only' do
+        @list.each do |elem|
+          expect(elem).to be_a(String)
+        end
       end
     end
     describe "#docker_create_opts" do
@@ -153,16 +163,40 @@ describe PhpFpmDocker::Pool do
       end
     end
     describe "#start" do
+      let (:method) {
+        p.start
+      }
+      before (:example) {
+        # catch upstream calls
+        @spawn_list = ['spawn','spawn_args']
+        @php_list = ['php','php_args']
+        allow(p).to receive(:spawn_command).and_return(@spawn_list)
+        allow(p).to receive(:php_command).and_return(@php_list)
+        allow(p).to receive(:docker_create_opts).and_return({})
+        allow(p).to receive(:docker_start_opts).and_return({})
+      }
       it "starts container" do
         # container instance
         dbl_c_inst = double
-        allow(dbl_c_inst).to receive(:start)
-
+        expect(dbl_c_inst).to receive(:start).with({})
+        expect(@dbl_docker_container).to receive(:create).and_return(dbl_c_inst)
+        method
+      end
+      it "build cmd correctly" do
+        # container instance
+        dbl_c_inst = double
+        allow(dbl_c_inst).to receive(:start).with({})
+        hash = hash_including('Cmd' => (@spawn_list + ['--'] + @php_list))
+        expect(@dbl_docker_container).to receive(:create).with(hash).and_return(dbl_c_inst)
+        method
+      end
+      it 'enables the pool' do
+        # container instance
+        dbl_c_inst = double
+        expect(dbl_c_inst).to receive(:start).with({})
+        expect(@dbl_docker_container).to receive(:create).and_return(dbl_c_inst)
+        method
         # container class
-        dbl_c = class_double('Docker::Container').as_stubbed_const()
-        allow(dbl_c).to receive(:create).with(hash_including('Image' => 'deadbeef')).and_return(dbl_c_inst)
-
-        p.start
         expect(p.enabled).to eq(true)
       end
     end

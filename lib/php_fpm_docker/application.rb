@@ -6,9 +6,10 @@ require 'logger'
 module PhpFpmDocker
   # Application that is used as init script
   class Application
-    @name = 'php_fpm_docker'
-    @longname = 'PHP FPM Docker Wrapper'
+    attr_reader :php_name
     def initialize
+      @name = 'php_fpm_docker'
+      @longname = 'PHP FPM Docker Wrapper'
       # Create log dir if needed
       log_dir = Pathname.new('/var/log/php_fpm_docker')
       FileUtils.mkdir_p log_dir unless log_dir.directory?
@@ -223,9 +224,9 @@ eos
 
     def help
       $stderr.puts(
-        "Usage: #{script_name} $NAME {#{allowed_methods.join '|'}}"
+        "Usage: #{php_name} $NAME {#{allowed_methods.join '|'}}"
       )
-      $stderr.puts("       #{script_name} install")
+      $stderr.puts("       #{php_name} install")
     end
 
     def run
@@ -239,19 +240,11 @@ eos
 
     private
 
-    attr_reader :script_name
+    attr_writer :php_name
 
     # Get php name from scriptname
     def full_name
       "#{@longname} '#{php_name}'"
-    end
-
-    def script_name=(name)
-      @script_name = File.absolute_path(name)
-    end
-
-    def php_name
-      File.basename script_name
     end
 
     def parse_arguments(args)
@@ -262,7 +255,7 @@ eos
       return :install if args.first == 'install'
 
       # get correct php name
-      self.script_name = args.first
+      self.php_name = args.first
 
       fail 'wrong argument count' if args[1].nil?
 

@@ -103,11 +103,11 @@ module PhpFpmDocker
       [
         @launcher.spawn_cmd_path,
         '-s', @config['listen'],
-        '-U', listen_uid,
-        '-G', listen_gid,
+        '-U', listen_uid.to_s,
+        '-G', listen_gid.to_s,
         '-M', '0660',
-        '-u', uid,
-        '-g', gid,
+        '-u', uid.to_s,
+        '-g', gid.to_s,
         '-C', '4',
         '-n'
       ]

@@ -40,7 +40,7 @@ describe PhpFpmDocker::Application do
       a_i.instance_eval{ run }
     }
     before (:example) do
-      allow(a_i).to receive(:script_name).and_return('script_name')
+      a_i.instance_variable_set(:@php_name,'php_name')
       @argv = []
       stub_const('ARGV', @argv)
     end
@@ -51,39 +51,11 @@ describe PhpFpmDocker::Application do
       expect{method}.not_to raise_error
     end
     it "incorrect arguments" do
-      allow(@dbl_logger_instance).to receive(:warn).with('script_name')
+      allow(@dbl_logger_instance).to receive(:warn).with('php_name')
       expect(a_i).to receive(:parse_arguments).with(@argv).and_raise(RuntimeError, 'wrong')
       expect(a_i).to receive(:help)
       expect(a_i).to receive(:exit).with(3)
       expect{method}.not_to raise_error
-    end
-  end
-  describe '#script_name=' do
-    before(:example){
-      @name = 'php_fpm_docker_asdasd-das_123'
-      @result = "/etc/init.d/#{@name}"
-    }
-    let (:method) {
-      a_i.instance_exec(@args) {|x| self.script_name = x}
-      expect(a_i.instance_variable_get(:@script_name)).to eq(@result)
-    }
-    it 'relative path extended' do
-      @args = "/etc/../etc/init.d/#{@name}"
-      method
-    end
-    it 'relative path' do
-      Dir.chdir('/etc')
-      @args = "./init.d/#{@name}"
-      method
-    end
-    it 'absolute path' do
-      @args = "/etc/init.d/#{@name}"
-      method
-    end
-    it 'only script' do
-      Dir.chdir('/etc/init.d')
-      @args = @name
-      method
     end
   end
   describe '#parse_arguments' do
@@ -91,7 +63,7 @@ describe PhpFpmDocker::Application do
       a_i.instance_exec(@args) {|x| parse_arguments(x)}
     }
     let (:valid_args) {
-      allow(a_i).to receive(:script_name).and_return('script_name')
+      a_i.instance_variable_set(:@php_name,'php_name')
       expect(a_i).to receive(:allowed_methods).and_return([:valid])
     }
     it 'fails without arguments' do
@@ -102,12 +74,12 @@ describe PhpFpmDocker::Application do
       @args = ['install']
       expect(method).to eq(:install)
     end
-    it "args=['script_name','valid']" do
+    it "args=['name','valid']" do
       valid_args
-      @args = ['script_name','valid']
-      expect(a_i).to receive(:script_name=).with('script_name')
+      @args = ['name','valid']
       expect(@dbl_logger_instance).to receive(:info)
       expect(method).to eq(:valid)
+      expect(a_i.instance_variable_get(:@php_name)).to eq('name')
     end
     it "args=['name','invalid']" do
       valid_args

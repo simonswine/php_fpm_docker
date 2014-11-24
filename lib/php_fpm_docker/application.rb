@@ -152,7 +152,7 @@ eos
       end
 
       # init
-      l = Launcher.new @php_name
+      l = Launcher.new php_name
 
       # run daemon
       self.pid = l.run
@@ -221,57 +221,77 @@ eos
       start
     end
 
-    def run # rubocop:disable AbcSize
-      # allowed arguments
-      allowed_methods = public_methods(false)
-      allowed_methods.delete(:run)
-      allowed_methods.delete(:install)
+    def help
+      $stderr.puts(
+        "Usage: #{script_name} $NAME {#{allowed_methods.join '|'}}"
+      )
+      $stderr.puts("       #{script_name} install")
+    end
 
-      begin
-
-        # no args
-        fail 'no argument' if ARGV.first.nil?
-
-        # install mode
-        exit install if ARGV.first == 'install'
-
-        # get correct php name
-        @php_name = ARGV.first
-
-        method_to_call = ARGV[1].to_sym
-
-        fail "unknown method #{ARGV[1]}" \
-          unless allowed_methods.include?(method_to_call)
-
-        @logger.info(@php_name) { "calling method #{method_to_call}" }
-
-        exit send(method_to_call)
-
-      rescue RuntimeError => e
-        @logger.warn(@php_name) { e.message }
-        $stderr.puts(
-          "Usage: #{script_name} $NAME {#{allowed_methods.join '|'}}"
-        )
-        $stderr.puts("       #{script_name} install")
-
-        exit 3
-      end
+    def run
+      method_to_call = parse_arguments(ARGV)
+      exit send(method_to_call)
+    rescue RuntimeError => e
+      @logger.warn(php_name) { e.message }
+      help
+      exit 3
     end
 
     private
 
+    attr_reader :script_name
+
     # Get php name from scriptname
     def full_name
-      "#{@longname} '#{@php_name}'"
+      "#{@longname} '#{php_name}'"
+    end
+
+    def script_name=(name)
+      @script_name = File.absolute_path(name)
+    end
+
+    def php_name
+      File.basename script_name
+    end
+
+    def parse_arguments(args)
+      # no args
+      fail 'no argument' if args.first.nil?
+
+      # install mode
+      return :install if args.first == 'install'
+
+      # get correct php name
+      self.script_name = args.first
+
+      fail 'wrong argument count' if args[1].nil?
+
+      method_to_call = args[1].to_sym
+
+      fail "unknown method #{args[1]}" \
+        unless allowed_methods.include?(method_to_call)
+
+      @logger.info(php_name) { "calling method #{method_to_call}" }
+
+      method_to_call
+    end
+
+    def allowed_methods
+      retval = public_methods(false)
+      retval.delete(:run)
+      retval.delete(:install)
+      retval
     end
 
     def pid_file
-      File.join('/var/run/', "#{@name}_#{@php_name}.run")
+      File.join('/var/run/', "#{@name}_#{php_name}.run")
     end
 
     def pid
       return nil unless File.exist? pid_file
-      open(pid_file).read.strip.to_i
+      val = open(pid_file).read.strip.to_i
+      return nil if val == 0
+      val
     end
 
     def pid=(pid)

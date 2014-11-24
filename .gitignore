@@ -6,7 +6,6 @@
 .yardoc
 .idea/
 coverage
-doc/
 lib/bundler/man
 pkg
 rdoc

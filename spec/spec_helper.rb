@@ -1,3 +1,6 @@
+require 'coveralls'
+Coveralls.wear!
+
 # Set load path for this module
 dir = File.expand_path(File.join(File.dirname(__FILE__),'..'))
 $LOAD_PATH.unshift File.join(dir, 'lib')

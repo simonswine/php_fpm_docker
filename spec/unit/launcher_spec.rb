@@ -289,7 +289,7 @@ describe PhpFpmDocker::Launcher do
       check_set_op
     end
   end
-  describe '#check_pools' do
+  describe '#check_pools_n' do
     it 'forwards to pools_action' do
       hash = {
         :hash1 => { :name => :map1},

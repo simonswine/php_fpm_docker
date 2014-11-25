@@ -65,9 +65,6 @@ module PhpFpmDocker
       end
     end
 
-    def check_pools
-    end
-
     def start_pools
       @pools = {}
       reload_pools
@@ -118,6 +115,10 @@ module PhpFpmDocker
     end
 
     def check_pools
+      'do nothing'
+    end
+
+    def check_pools_n
       pools_action(@pools, @pools.keys, :check)
     end
 

@@ -22,40 +22,50 @@ module PhpFpmDocker
       @logger = Logger.new(log_dir.join("#{name}.log"), 'daily')
       @logger.info(to_s) { 'init' }
 
-      begin
-        test_directories
+      test
+    end
 
-        # Parse config
-        parse_config
+    def test
+      test_directories
 
-        # Test docker image
-        test_docker_image
+      # Parse config
+      parse_config
 
-      rescue RuntimeError => e
-        @logger.fatal(to_s) { "Error while init: #{e.message}" }
-        exit 1
-      end
+      # Test docker image
+      test_docker_image
+
+    rescue RuntimeError => e
+      @logger.fatal(to_s) { "Error while init: #{e.message}" }
+      exit 1
     end
 
     def run
       start_pools
 
       pid = fork do
-        Signal.trap('USR1') do
-          @logger.info(to_s) { 'Signal USR1 received reloading now' }
-          reload_pools
-        end
-        Signal.trap('TERM') do
-          @logger.info(to_s) { 'Signal TERM received stopping me now' }
-          stop_pools
-          exit 0
-        end
-        Kernel.loop do
-          sleep 1
-        end
+        fork_run
       end
       Process.detach(pid)
       pid
+    end
+
+    def fork_run
+      Signal.trap('USR1') do
+        @logger.info(to_s) { 'Signal USR1 received reloading now' }
+        reload_pools
+      end
+      Signal.trap('TERM') do
+        @logger.info(to_s) { 'Signal TERM received stopping me now' }
+        stop_pools
+        exit 0
+      end
+      Kernel.loop do
+        check_pools
+        sleep 1
+      end
+    end
+
+    def check_pools
     end
 
     def start_pools
@@ -68,12 +78,15 @@ module PhpFpmDocker
     end
 
     def create_missing_pool_objects
+      return if @pools.nil?
+      return if @pools_old.nil?
       (@pools.keys & @pools_old.keys).each do |hash|
         @pools[hash][:object] = @pools_old[hash][:object]
       end
     end
 
     def move_existing_pool_objects
+      return if @pools.nil?
       @pools.keys.each do |hash|
         pool = @pools[hash]
         # skip if there's already an object
@@ -118,7 +131,7 @@ module PhpFpmDocker
           begin
             pool[:object].send(action)
           rescue => e
-            @logger.info(pool[:object].to_s) do
+            @logger.warn(pool[:object].to_s) do
               "Failed to #{action}: #{e.message}"
             end
           end

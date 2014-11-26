@@ -71,15 +71,14 @@ module PhpFpmDocker
       needed_pools = config.reject do |key, _value|
         key == 'global'
       end
-      needed_pools.map do |key, value|
-        [
-          hash(key, value),
-          {
-            name: key,
-            config: value
-          }
-        ]
-      end.to_h
+      retval = {}
+      needed_pools.each do |key, value|
+        retval[hash(key, value)] = {
+          name: key,
+          config: value
+        }
+      end
+      retval
     end
   end
 end

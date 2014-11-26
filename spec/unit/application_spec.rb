@@ -95,15 +95,8 @@ describe PhpFpmDocker::Application do
     let (:method) {
       a_i.instance_eval{ allowed_methods }
     }
-    [:start, :stop, :reload, :restart, :status].each do |cmd|
-      it "have command #{cmd}" do
-        expect(method).to include(cmd)
-      end
-    end
-    [:run, :install].each do |cmd|
-      it "have no command #{cmd}" do
-        expect(method).not_to include(cmd)
-      end
+    it "have exactly the commands" do
+      expect(method).to contain_exactly(:start, :stop, :reload, :restart, :status)
     end
   end
   describe '#pid' do

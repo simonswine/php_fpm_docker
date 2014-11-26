@@ -14,12 +14,17 @@ describe PhpFpmDocker::Launcher do
     @dbl_pool = class_double('PhpFpmDocker::Pool').as_stubbed_const()
 
     # Fileutils
+    @orig_fileutils = FileUtils
     @dbl_fileutils = class_double('FileUtils').as_stubbed_const()
     allow(@dbl_fileutils).to receive(:mkdir_p)
   }
+  let (:a_i_only) {
+    @dbl_app = instance_double('PhpFpmDocker::Application')
+    described_class.new(@name ||=  'launcher1', @dbl_app)
+  }
   let (:a_i){
     allow_any_instance_of(described_class).to receive(:test)
-    described_class.new(@name ||=  'launcher1')
+    a_i_only
   }
   let (:a_c){
     described_class
@@ -27,7 +32,7 @@ describe PhpFpmDocker::Launcher do
   describe '#initialize' do
     let (:method){
       expect_any_instance_of(described_class).to receive(:test)
-      described_class.new(@name ||=  'launcher1')
+      a_i_only
     }
     it 'should not raise error' do
       expect{method}.not_to raise_error
@@ -39,7 +44,7 @@ describe PhpFpmDocker::Launcher do
       @downstream_methods = [:test_docker_image,:test_directories, :parse_config]
     }
     let (:method){
-      described_class.new(@name ||=  'launcher1')
+      a_i_only
     }
     it 'should call down stream functions' do
       @downstream_methods.each do |m|
@@ -336,4 +341,117 @@ describe PhpFpmDocker::Launcher do
       method(@hash, @hash.keys, @method)
     end
   end
+  describe '#test_directories' do
+    before(:example){
+      @dirs = {}
+      [ :config_dir_path, :pools_dir_path ].each do |m|
+        @dirs[m] = dir = Dir.mktmpdir(m.to_s)
+        allow(a_i).to receive(m).and_return(Pathname.new dir)
+      end
+    }
+    after(:example) {
+      @dirs.each do |key,dir|
+        @orig_fileutils.rm_rf(dir) if File.exist? dir
+      end
+    }
+    it 'succeeds if all dirs exist' do
+      method
+    end
+    it 'fails if config_dir is missing' do
+      @orig_fileutils.rm_rf(@dirs[:config_dir_path])
+      expect{method}.to raise_error(/not found/)
+    end
+    it 'fails if pools_dir is missing' do
+      @orig_fileutils.rm_rf(@dirs[:pools_dir_path])
+      expect{method}.to raise_error(/not found/)
+    end
+  end
+  describe '#bind_mounts' do
+    before(:example){
+      @bind_mounts_apps = ['app1', 'app2', 'dup1', 'dup2']
+      @bind_mounts_mine = ['mine1', ' mine2 ', 'dup1 ', 'dup2' ]
+    }
+    let(:set_mine){
+      inst_set(:@ini_file,{:main => {'bind_mounts' => @bind_mounts_mine.join(',')}})
+    }
+    let(:set_apps){
+      expect(@dbl_app).to receive(:bind_mounts).and_return(@bind_mounts_apps.dup)
+    }
+    after(:example) {
+    }
+    it 'returns application\'s mounts' do
+      set_mine
+      set_apps
+      expect(method).to include(*@bind_mounts_apps)
+    end
+    it 'removes white spaces from mine' do
+      set_mine
+      set_apps
+      mounts = @bind_mounts_mine.map {|m| m.strip}
+      expect(method).to include(*mounts)
+    end
+    it 'removes duplicates' do
+      set_mine
+      set_apps
+      result = method
+      expect(result).to contain_exactly(*result.uniq)
+    end
+  end
+  describe 'join functions' do
+    before(:example){
+      a_i
+      expect(@dbl_app).to receive(:config_dir_path).and_return(Pathname.new('/tmp/etc/php_fpm_config')).once
+    }
+    [
+      [:config_dir_path, /#{@name}$/],
+      [:config_path, /config\.ini$/],
+      [:pools_dir_path, /pools\.d$/],
+    ].each do |m, re|
+      describe "##{m.to_s}" do
+        it 'returns joined pathname' do
+          result = method
+          expect(result).to be_a(Pathname)
+          expect(result.to_s).to match(re)
+        end
+      end
+    end
+  end
+  describe '#web_path' do
+    before(:example) {
+      @app_path = Pathname.new '/tmp/app'
+      @launcher_path = Pathname.new '/tmp/laun'
+      @result = @app_path.to_s
+      a_i
+      allow(@dbl_app).to receive(:web_path).and_return(@app_path)
+    }
+    after(:example) {
+      inst_set(:@ini_file, @ini_file)
+      result = method
+      expect(result).to be_a(Pathname)
+      expect(result.to_s).to eq(@result)
+    }
+    it 'returns launcher config if set' do
+      @ini_file = { :main => {'web_path' => @launcher_path.to_s}}
+      @result = @launcher_path.to_s
+    end
+    it 'return app config if empty string' do
+      @ini_file = { :main => {'web_path' => ''}}
+    end
+    it 'return app config if no inifile' do
+      @ini_file = nil
+    end
+    it 'return app config if nil value' do
+      @ini_file = { :main => {}}
+    end
+  end
+  describe '#parse_config' do
+    before(:example){
+      @file = Tempfile.new 'config'
+      allow(a_i).to receive(:config_path).and_return(Pathname.new @file.path)
+    }
+    it :tests do
+      method
+    end
+  end
+
 end

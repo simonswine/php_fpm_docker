@@ -5,7 +5,7 @@ require 'logger'
 
 module PhpFpmDocker
   # Application that is used as init script
-  class Application
+  class Application # rubocop:disable ClassLength
     attr_reader :php_name
     def initialize
       @name = 'php_fpm_docker'
@@ -153,7 +153,7 @@ eos
       end
 
       # init
-      l = Launcher.new php_name
+      l = Launcher.new php_name, self
 
       # run daemon
       self.pid = l.run
@@ -216,6 +216,18 @@ eos
       0
     end
 
+    def config_dir_path
+      Pathname.new('/etc/php_fpm_docker/conf.d')
+    end
+
+    def bind_mounts
+      []
+    end
+
+    def web_path
+      Pathname.new('/var/www')
+    end
+
     def restart
       ret_val = stop
       return ret_val if ret_val != 0
@@ -271,8 +283,17 @@ eos
 
     def allowed_methods
       retval = public_methods(false)
-      retval.delete(:run)
-      retval.delete(:install)
+      [
+        :install,
+        :run,
+        :bind_mounts,
+        :config_dir_path,
+        :web_path,
+        :help,
+        :php_name
+      ].each do |e|
+        retval.delete e
+      end
       retval
     end
 

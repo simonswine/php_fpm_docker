@@ -11,8 +11,9 @@ module PhpFpmDocker
   class Launcher # rubocop:disable ClassLength
     attr_reader :docker_image, :php_cmd_path, :spawn_cmd_path
 
-    def initialize(name) # rubocop:disable MethodLength
+    def initialize(name, app) # rubocop:disable MethodLength
       @name = name
+      @app = app
 
       # Create log dir if needed
       log_dir = Pathname.new('/var/log/php_fpm_docker')
@@ -29,7 +30,7 @@ module PhpFpmDocker
       test_directories
 
       # Parse config
-      parse_config
+      @ini_file = parse_config
 
       # Test docker image
       test_docker_image
@@ -144,16 +145,11 @@ module PhpFpmDocker
     end
 
     def test_directories
-      # Get config dirs and paths
-      @conf_directory = Pathname.new('/etc/php_fpm_docker/conf.d').join(@name)
-      fail "Config directory '#{@conf_directory}' not found" \
-      unless @conf_directory.directory?
+      fail "Config directory '#{config_dir_path}' not found" \
+      unless config_dir_path.directory?
 
-      @pools_directory = @conf_directory.join('pools.d')
-      fail "Pool directory '#{@pools_directory}' not found" \
-      unless @pools_directory.directory?
-
-      @config_path = @conf_directory.join('config.ini')
+      fail "Pool directory '#{pools_dir_path}' not found" \
+      unless pools_dir_path.directory?
     end
 
     def to_s
@@ -162,37 +158,63 @@ module PhpFpmDocker
 
     # Get neccessary bind mounts
     def bind_mounts
-      @ini_file[:main]['bind_mounts'].split(',') || []
+      mine = @ini_file[:main]['bind_mounts'].split(',') || []
+      mine = mine.map(&:strip)
+      (mine + @app.bind_mounts).uniq
+    end
+
+    def config_dir_path
+      @app.config_dir_path.join @name
+    end
+
+    def pools_dir_path
+      config_dir_path.join('pools.d')
+    end
+
+    def config_path
+      config_dir_path.join('config.ini')
     end
 
     # Get webs base path
     def web_path
-      Pathname.new(@ini_file[:main]['web_path'] || '/var/www')
+      path = @ini_file[:main]['web_path']
+      fail TypeError('Empty string') if path.length == 0
+      Pathname.new(path)
+    rescue NoMethodError, TypeError
+      @app.web_path
     end
 
     # Parse the config file for all pools
-    def parse_config # rubocop:disable MethodLength
+    def parse_config
       # Test for file usability
-      fail "Config file '#{@config_path}' not found"\
-      unless @config_path.file?
-      fail "Config file '#{@config_path}' not readable"\
-      unless @config_path.readable?
+      fail "Config file '#{config_path}' not found"\
+      unless config_path.file?
+      fail "Config file '#{config_path}' not readable"\
+      unless config_path.readable?
 
-      @ini_file = IniFile.load(@config_path)
+      IniFile.load(config_path)
+    end
 
-      begin
-        docker_image = @ini_file[:main]['docker_image']
-        @docker_image = Docker::Image.get(docker_image)
-        @logger.info(to_s) do
-          "Docker image id=#{@docker_image.id[0..11]} name=#{docker_image}"
-        end
-      rescue NoMethodError
-        raise 'No docker_image in section main in config found'
-      rescue Docker::Error::NotFoundError
-        raise "Docker_image '#{docker_image}' not found"
-      rescue Excon::Errors::SocketError => e
-        raise "Docker connection could not be established: #{e.message}"
+    def ini_file
+      @ini_file ||= parse_config
+    end
+
+    def docker_image
+      @docker_image ||= docker_image_get
+    end
+
+    def docker_image_get
+      docker_image = @ini_file[:main]['docker_image']
+      @docker_image = Docker::Image.get(docker_image)
+      @logger.info(to_s) do
+        "Docker image id=#{@docker_image.id[0..11]} name=#{docker_image}"
       end
+    rescue NoMethodError
+      raise 'No docker_image in section main in config found'
+    rescue Docker::Error::NotFoundError
+      raise "Docker_image '#{docker_image}' not found"
+    rescue Excon::Errors::SocketError => e
+      raise "Docker connection could not be established: #{e.message}"
     end
 
     def docker_opts

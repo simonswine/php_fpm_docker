@@ -1,10 +1,7 @@
 # coding: utf-8
 require 'pathname'
-require 'inifile'
-require 'pp'
 require 'logger'
-require 'docker'
-require 'digest'
+require 'php_fpm_docker/config_parser'
 
 module PhpFpmDocker
   # Represent a single docker image
@@ -22,18 +19,13 @@ module PhpFpmDocker
       # Open logger
       @logger = Logger.new(log_dir.join("#{name}.log"), 'daily')
       @logger.info(to_s) { 'init' }
-
-      test
     end
 
     def test
       test_directories
 
       # Parse config
-      @ini_file = parse_config
-
-      # Test docker image
-      test_docker_image
+      config
 
     rescue RuntimeError => e
       @logger.fatal(to_s) { "Error while init: #{e.message}" }
@@ -100,7 +92,7 @@ module PhpFpmDocker
     def reload_pools(pools = nil)
       @pools_old = @pools
       if pools.nil?
-        @pools = pools_from_config
+        @pools = pools_config
       else
         @pools = pools
       end
@@ -158,7 +150,7 @@ module PhpFpmDocker
 
     # Get neccessary bind mounts
     def bind_mounts
-      mine = @ini_file[:main]['bind_mounts'].split(',') || []
+      mine = config[:main]['bind_mounts'].split(',') || []
       mine = mine.map(&:strip)
       (mine + @app.bind_mounts).uniq
     end
@@ -177,155 +169,25 @@ module PhpFpmDocker
 
     # Get webs base path
     def web_path
-      path = @ini_file[:main]['web_path']
+      path = config[:main]['web_path']
       fail TypeError('Empty string') if path.length == 0
       Pathname.new(path)
     rescue NoMethodError, TypeError
       @app.web_path
     end
 
-    # Parse the config file for all pools
-    def parse_config
-      # Test for file usability
-      fail "Config file '#{config_path}' not found"\
-      unless config_path.file?
-      fail "Config file '#{config_path}' not readable"\
-      unless config_path.readable?
-
-      IniFile.load(config_path)
+    def pools_config
+      @pools_config ||= ConfigParser.new(pools_dir_path)
+      @pools_config.pools
     end
 
-    def ini_file
-      @ini_file ||= parse_config
+    def config
+      @config ||= ConfigParser.new(config_path)
+      @config.config
     end
 
     def docker_image
       @docker_image ||= docker_image_get
-    end
-
-    def docker_image_get
-      docker_image = @ini_file[:main]['docker_image']
-      @docker_image = Docker::Image.get(docker_image)
-      @logger.info(to_s) do
-        "Docker image id=#{@docker_image.id[0..11]} name=#{docker_image}"
-      end
-    rescue NoMethodError
-      raise 'No docker_image in section main in config found'
-    rescue Docker::Error::NotFoundError
-      raise "Docker_image '#{docker_image}' not found"
-    rescue Excon::Errors::SocketError => e
-      raise "Docker connection could not be established: #{e.message}"
-    end
-
-    def docker_opts
-      {
-        'Image' => @docker_image.id
-      }
-    end
-
-    # Reads config sections from a inifile
-    def pools_config_content_from_file(config_path)
-      ini_file = IniFile.load(config_path)
-
-      ret_val = []
-      ini_file.each_section do |section|
-        ret_val << [section, ini_file[section]]
-      end
-      ret_val
-    end
-
-    # Merges config sections form all inifiles
-    def pools_config_contents
-      ret_val = []
-
-      # Loop over
-      Dir[@pools_directory.join('*.conf').to_s].each do |config_path|
-        ret_val += pools_config_content_from_file(config_path)
-      end
-      ret_val
-    end
-
-    # Hashes configs to detect changes
-    def pools_from_config
-      configs = {}
-
-      pools_config_contents.each do |section|
-        # Hash section name and content
-        d = Digest::SHA2.new(256)
-        hash = d.reset.update(section[0]).update(section[1].to_s).to_s
-
-        configs[hash] = {
-          name: section[0],
-          config: section[1]
-        }
-      end
-      configs
-    end
-
-    # Docker init
-    def test_docker_cmd(cmd) # rubocop:disable MethodLength
-      # retry this block 3 times
-      tries ||= 3
-
-      opts = docker_opts
-      opts['Cmd'] = cmd
-      dict = {}
-
-      # Set timeout
-      Docker.options[:read_timeout] = 2
-
-      cont = Docker::Container.create(opts)
-      cont.start
-      output = cont.attach
-      dict[:ret_val] = cont.wait(5)['StatusCode']
-      cont.delete(force: true)
-
-      dict[:stdout] = output[0].first
-      dict[:stderr] = output[1].first
-
-      # Set timeout
-      Docker.options[:read_timeout] = 15
-
-      @logger.debug(to_s) do
-        "cmd=#{cmd.join(' ')} ret_val=#{dict[:ret_val]}" \
-        " stdout=#{dict[:stdout]} stderr=#{dict[:stderr]}"
-      end
-
-      dict
-    rescue Docker::Error::TimeoutError => e
-      if (tries -= 1) > 0
-        cont.delete(force: true) if cont.nil?
-        @logger.debug(to_s) { 'ran into timeout retry' }
-        retry
-      end
-      raise e
-    end
-
-    # Testing the docker image if i can be used
-    def test_docker_image # rubocop:disable MethodLength
-      # Test possible php commands
-      ['php-cgi', 'php5-cgi', 'php', 'php5'].each do |php_cmd|
-        result = test_docker_cmd [:which, php_cmd]
-
-        next unless result[:ret_val] == 0
-
-        php_cmd_path = result[:stdout].strip
-
-        result = test_docker_cmd [php_cmd_path, '-v']
-
-        next unless result[:ret_val] == 0
-        php_version_re = /PHP [A-Za-z0-9\.\-\_]+ \(cgi-fcgi\)/
-        next if php_version_re.match(result[:stdout]).nil?
-
-        @php_cmd_path = php_cmd_path
-        break
-      end
-      fail 'No usable fast-cgi enabled php found in image' if @php_cmd_path.nil?
-
-      # Test if spawn-fcgi exists
-      result = test_docker_cmd [:which, 'spawn-fcgi']
-      fail 'No usable spawn-fcgi found in image' unless result[:ret_val] == 0
-      @spawn_cmd_path = result[:stdout].strip
     end
   end
 end

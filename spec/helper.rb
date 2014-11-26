@@ -3,7 +3,11 @@ module Helper
     if value.nil?
       value=nil
     else
-      value=Marshal.load( Marshal.dump(value))
+      if value.is_a? Hash or value.is_a? Array
+        value=Marshal.load( Marshal.dump(value))
+      else
+        value
+      end
     end
     a_i.instance_variable_set(var, value)
   end

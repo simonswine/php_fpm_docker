@@ -12,12 +12,16 @@ module Helper
     allow(c).to receive(:logger).and_return(dbl_logger)
   end
 
+  def deep_clone(i)
+    Marshal.load(Marshal.dump(i))
+  end
+
   def inst_set(var, value)
     if value.nil?
       value=nil
     else
       if value.is_a? Hash or value.is_a? Array
-        value=Marshal.load( Marshal.dump(value))
+        value = deep_clone value
       else
         value
       end
@@ -29,8 +33,14 @@ module Helper
     a_i.instance_variable_get(var)
   end
 
+  def get_method_name
+    name = self.class.metadata[:full_description].split('#')[1]
+    name = name.split.first
+    return name.to_sym
+  end
+
   def method(*args)
-    func = self.class.description[1..-1].to_sym
+    func = get_method_name
     a_i.instance_exec(func) {|f| send(f,*args)}
   end
 end

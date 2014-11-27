@@ -11,9 +11,6 @@ describe PhpFpmDocker::ConfigParser do
   let (:a_i) do
     a_i_only
   end
-  let (:a_c) do
-    described_class
-  end
   let (:prepare_files) do
     if @config.length == 1
       files = [[Tempfile.new('config').path, @config.first[1], true]]

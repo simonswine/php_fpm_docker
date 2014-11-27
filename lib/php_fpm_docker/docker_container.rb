@@ -1,16 +1,47 @@
 # coding: utf-8
+require 'php_fpm_docker/docker_image'
 require 'docker'
-require 'php_fpm_docker/logging'
 
 module PhpFpmDocker
   # Wraps the docker connection
-  class DockerImage
+  class DockerContainer
     include Logging
 
-    def initialize(image_name)
-      @image_name = image_name
+    def initialize(image)
+      if image.is_a?(DockerImage)
+        @image = image
+      else
+        fail(
+          ArgumentError,
+          "Expect a docker image as argument: #{image.class}"
+        )
+      end
     end
 
+    def options
+      {
+        'Image' => @image.id
+      }
+    end
+
+    def create(cmd, opts = {})
+      Docker.options[:read_timeout] = 2
+
+      my_opts = options
+      my_opts.merge opts
+
+      fail(ArgumentError, "cmd is no array: #{cmd}") unless cmd.is_a? Array
+
+      # ensure there are only strings
+      opts['Cmd'] = cmd.map(&:to_s)
+
+      @container = Docker::Container.create(my_opts)
+    end
+
+    def attach(_timeout)
+    end
+
+    # TODO: old stoff from here on
     def id
       image.id
     end
@@ -21,13 +52,14 @@ module PhpFpmDocker
 
     # Fetches image id form docker server
     def fetch_image
-      image = Docker::Image.get(@image_name)
-      logger.info do
-        "Docker image id=#{image.id[0..7]} name=#{@image_name}"
+      image_name = config[:main]['docker_image']
+      image = Docker::Image.get(image_name)
+      @logger.info(to_s) do
+        "Docker image id=#{@docker_image.id[0..7]} name=#{docker_image}"
       end
       image
     rescue Docker::Error::NotFoundError
-      raise "Docker_image '#{@image_name}' not found"
+      raise "Docker_image '#{image_name}' not found"
     rescue Excon::Errors::SocketError => e
       raise "Docker connection could not be established: #{e.message}"
     end
@@ -56,7 +88,7 @@ module PhpFpmDocker
       # Set timeout
       Docker.options[:read_timeout] = 15
 
-      logger.debug(to_s) do
+      @logger.debug(to_s) do
         "cmd=#{cmd.join(' ')} ret_val=#{dict[:ret_val]}" \
         " stdout=#{dict[:stdout]} stderr=#{dict[:stderr]}"
       end
@@ -65,7 +97,7 @@ module PhpFpmDocker
     rescue Docker::Error::TimeoutError => e
       if (tries -= 1) > 0
         cont.delete(force: true) if cont.nil?
-        logger.debug(to_s) { 'ran into timeout retry' }
+        @logger.debug(to_s) { 'ran into timeout retry' }
         retry
       end
       raise e
@@ -99,12 +131,6 @@ module PhpFpmDocker
     end
 
     def docker_image_get
-    end
-
-    def docker_opts
-      {
-        'Image' => @docker_image.id
-      }
     end
   end
 end

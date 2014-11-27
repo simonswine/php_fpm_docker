@@ -35,4 +35,40 @@ describe PhpFpmDocker::DockerContainer do
       expect(method).to include('Image' => @image.id)
     end
   end
+  describe '#create' do
+    before(:example) do
+      a_i
+      @output = {
+        'Image' => @image.id,
+        'Cmd' => ['test','me'],
+      }
+      @input = deep_clone @output['Cmd']
+      @opts = {}
+    end
+    context 'creates container' do
+      after(:example) do
+        expect(Docker::Container).to receive(:create).with(deep_clone @output).and_return(:container)
+        expect(method(@input,@opts)).to eq(:container)
+      end
+      it 'creates container' do
+      end
+      it 'creates container and appends options' do
+        @opts['name'] = 'name1'
+        @output['name'] = 'name1'
+      end
+      it 'creates container and string only cmd array' do
+        @output['Cmd'] << '100'
+        @input << 100
+      end
+      it 'overrides default options' do
+        @opts['Image'] = 'dead'
+        @output['Image'] = 'dead'
+      end
+    end
+    it 'fail if nil cmd' do
+      @input = nil
+      @fail = true
+      expect{method(@input,@opts)}.to raise_error(ArgumentError, /no array/)
+    end
+  end
 end

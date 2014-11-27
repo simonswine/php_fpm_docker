@@ -32,6 +32,11 @@ module PhpFpmDocker
       raise "Docker connection could not be established: #{e.message}"
     end
 
+    # Run command in container
+    def cmd(*args)
+      DockerContainer.cmd(self, *args)
+    end
+
     # Docker init
     def test_docker_cmd(cmd) # rubocop:disable MethodLength
       # retry this block 3 times

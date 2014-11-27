@@ -7,6 +7,12 @@ module PhpFpmDocker
   class DockerContainer
     include Logging
 
+    def self.cmd(image, *args)
+      c=DockerContainer.new(image)
+      c.create(*args)
+      c.output
+    end
+
     def initialize(image)
       if image.is_a?(DockerImage)
         @image = image
@@ -20,25 +26,64 @@ module PhpFpmDocker
 
     def options
       {
-        'Image' => @image.id
+        'Image' => @image.id,
       }
     end
 
+    def output(timeout=5)
+      start
+      output=attach(
+        :stream => true,
+        :stdin => nil,
+        :stdout => true,
+        :stderr => true,
+        :logs => true,
+        :tty => false
+      )
+      return_code = wait(timeout)['StatusCode']
+      delete(force: true)
+
+      {
+        :return_code => return_code,
+        :stdout => output[0][0],
+        :stderr => output[1][0],
+      }
+    end
+
+    def container
+      fail 'no container created' if @container.nil?
+      @container
+    end
+
+    def method_missing(sym, *args, &block)
+      if [:start, :stop, :delete, :wait, :logs, :attach].include? sym
+        container.send(sym, *args, &block)
+      else
+        super
+      end
+    end
+
     def create(cmd, opts = {})
-      Docker.options[:read_timeout] = 2
 
       my_opts = options
-      my_opts.merge opts
+      my_opts.merge! opts
 
       fail(ArgumentError, "cmd is no array: #{cmd}") unless cmd.is_a? Array
 
       # ensure there are only strings
-      opts['Cmd'] = cmd.map(&:to_s)
+      my_opts['Cmd'] = cmd.map(&:to_s)
 
       @container = Docker::Container.create(my_opts)
     end
 
-    def attach(_timeout)
+    def aaaattach(timeout=5)
+      dict = {}
+      Docker.options[:read_timeout] = timeout
+      dict[:ret_val] = container.wait(5)['StatusCode']
+      output = container.attach
+      dict[:stdout] = output[0].first
+      dict[:stderr] = output[1].first
+      dict
     end
 
     # TODO: old stoff from here on

@@ -3,14 +3,6 @@ require 'php_fpm_docker/launcher'
 
 describe PhpFpmDocker::Launcher do
   before(:example) {
-    # Logger
-    @dbl_logger_instance = double
-    [:debug,:error,:warn,:info,:fatal].each do |loglevel|
-      allow(@dbl_logger_instance).to receive(loglevel)
-    end
-    @dbl_logger = class_double('Logger').as_stubbed_const()
-    allow(@dbl_logger).to receive(:new).and_return(@dbl_logger_instance)
-
     @dbl_pool = class_double('PhpFpmDocker::Pool').as_stubbed_const()
 
     # Fileutils
@@ -23,7 +15,8 @@ describe PhpFpmDocker::Launcher do
     described_class.new(@name ||=  'launcher1', @dbl_app)
   }
   let (:a_i){
-    allow_any_instance_of(described_class).to receive(:test)
+    allow(a_i_only).to receive(:test)
+    mock_logger(a_i_only)
     a_i_only
   }
   let (:a_c){
@@ -324,14 +317,14 @@ describe PhpFpmDocker::Launcher do
     }
     it 'all pools run without error' do
       @method = :start
-      expect(@dbl_logger_instance).not_to receive(:warn)
+      expect(dbl_logger).not_to receive(:warn)
       templates
       method_with_args
     end
     it 'all pools error' do
       @method = :start
       error = 'servus der error'
-      expect(@dbl_logger_instance).to receive(:warn) do |pool,&block|
+      expect(dbl_logger).to receive(:warn) do |pool,&block|
         expect(block.call).to match(/#{error}/)
       end.twice
       templates

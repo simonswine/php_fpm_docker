@@ -2,10 +2,13 @@
 require 'pathname'
 require 'logger'
 require 'php_fpm_docker/config_parser'
+require 'php_fpm_docker/logging'
 
 module PhpFpmDocker
   # Represent a single docker image
   class Launcher # rubocop:disable ClassLength
+    include Logging
+
     attr_reader :docker_image, :php_cmd_path, :spawn_cmd_path
 
     def initialize(name, app) # rubocop:disable MethodLength
@@ -15,10 +18,6 @@ module PhpFpmDocker
       # Create log dir if needed
       log_dir = Pathname.new('/var/log/php_fpm_docker')
       FileUtils.mkdir_p log_dir unless log_dir.directory?
-
-      # Open logger
-      @logger = Logger.new(log_dir.join("#{name}.log"), 'daily')
-      @logger.info(to_s) { 'init' }
     end
 
     def test
@@ -28,7 +27,7 @@ module PhpFpmDocker
       config
 
     rescue RuntimeError => e
-      @logger.fatal(to_s) { "Error while init: #{e.message}" }
+      logger.fatal(to_s) { "Error while init: #{e.message}" }
       exit 1
     end
 
@@ -44,11 +43,11 @@ module PhpFpmDocker
 
     def fork_run
       Signal.trap('USR1') do
-        @logger.info(to_s) { 'Signal USR1 received reloading now' }
+        logger.info(to_s) { 'Signal USR1 received reloading now' }
         reload_pools
       end
       Signal.trap('TERM') do
-        @logger.info(to_s) { 'Signal TERM received stopping me now' }
+        logger.info(to_s) { 'Signal TERM received stopping me now' }
         stop_pools
         exit 0
       end
@@ -125,7 +124,7 @@ module PhpFpmDocker
           begin
             pool[:object].send(action)
           rescue => e
-            @logger.warn(pool[:object].to_s) do
+            logger.warn(pool[:object].to_s) do
               "Failed to #{action}: #{e.message}"
             end
           end
@@ -133,7 +132,7 @@ module PhpFpmDocker
       else
         message << "No pools to #{action}"
       end
-      @logger.info(to_s) { message }
+      logger.info(to_s) { message }
     end
 
     def test_directories

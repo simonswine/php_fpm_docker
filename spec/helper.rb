@@ -1,4 +1,17 @@
 module Helper
+  def dbl_logger
+    return @dbl_logger unless @dbl_logger.nil?
+    logger=double
+    [:debug,:error,:warn,:info,:fatal].each do |loglevel|
+      allow(logger).to receive(loglevel)
+    end
+    @dbl_logger ||= logger
+  end
+
+  def mock_logger(c)
+    allow(c).to receive(:logger).and_return(dbl_logger)
+  end
+
   def inst_set(var, value)
     if value.nil?
       value=nil

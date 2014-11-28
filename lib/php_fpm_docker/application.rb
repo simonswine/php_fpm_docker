@@ -1,146 +1,40 @@
 # coding: utf-8
 require 'php_fpm_docker/launcher'
 require 'php_fpm_docker/pool'
-require 'logger'
+require 'php_fpm_docker/logging'
 
 module PhpFpmDocker
+
   # Application that is used as init script
   class Application # rubocop:disable ClassLength
+
+    @@log_path = nil
+
+    def self.log_path
+      @@log_path ||= log_dir_path.join('wrapper.log')
+    end
+
+    def self.log_path=(path)
+      # TODO: Check if input is pathname
+      @@log_path = path
+    end
+
+    def self.log_dir_path
+      Pathname.new('/var/log/php_fpm_docker')
+    end
+
+    include Logging
+
     attr_reader :php_name
+
     def initialize
       @name = 'php_fpm_docker'
       @longname = 'PHP FPM Docker Wrapper'
-      # Create log dir if needed
-      log_dir = Pathname.new('/var/log/php_fpm_docker')
-      FileUtils.mkdir_p log_dir unless log_dir.directory?
-
-      # Init logger
-      log_file = log_dir.join('wrapper.log')
-      @logger = Logger.new(log_file, 'daily')
     end
 
-    def install # rubocop:disable MethodLength, CyclomaticComplexity, PerceivedComplexity, LineLength,  AbcSize
-      # Get launcher name
-      begin
-        puts 'Enter name of the php docker launcher instance:'
-        name = $stdin.gets.chomp
-        fail 'Only use these characters: a-z0-9-_.' \
-          unless /^[a-z0-9\.\-_]+$/.match(name)
-      rescue RuntimeError =>  e
-        $stderr.puts(e.message)
-        retry
-      end
 
-      # Get image name
-      begin
-        puts 'Enter name of the docker image to use:'
-        image = $stdin.gets.chomp
-        fail 'Only use these characters: a-z0-9-_./:' \
-          unless /^[a-z0-9\.\-_\/\:]+$/.match(name)
-      rescue RuntimeError =>  e
-        $stderr.puts(e.message)
-        retry
-      end
-
-      bin_name = 'php_fpm_docker'
-      bin_path = nil?
-      # Path
-      begin
-        ENV['PATH'].split(':').each  do |folder|
-          path = File.join(folder, bin_name)
-          if File.exist? path
-            bin_path = path
-            break
-          end
-        end
-
-        if bin_path.nil?
-          bin_path = File.expand_path(File.join(
-            File.dirname(__FILE__),
-            '..',
-            '..',
-            'bin',
-            bin_name
-          ))
-        end
-
-      rescue RuntimeError =>  e
-        $stderr.puts(e.message)
-      end
-
-      puts image
-
-      config_basepath = Pathname.new '/etc/php_fpm_docker/conf.d'
-      config_dir = config_basepath.join name
-      config_path = config_dir.join 'config.ini'
-      config_pool = config_dir.join 'pools.d'
-      config_content = <<eos
-[main]
-docker_image=#{image}
-eos
-
-      initd_name = "php_fpm_docker_#{name}"
-      initd_path = Pathname.new File.join('/etc/init.d/', initd_name)
-      initd_content = <<eos
-#!/bin/sh
-### BEGIN INIT INFO
-# Provides:          #{initd_name}
-# Required-Start:    $remote_fs $network
-# Required-Stop:     $remote_fs $network
-# Default-Start:     2 3 4 5
-# Default-Stop:      0 1 6
-# Short-Description: starts PHP Docker launcher #{name}
-# Description:       Starts The PHP Docker launcher daemon #{name}
-### END INIT INFO
-
-NAME=#{name}
-DAEMON=#{bin_path}
-
-
-case "$1" in
-    start)
-  $DAEMON $NAME start
-  ;;
-    stop)
-  $DAEMON $NAME stop
-  ;;
-    reload)
-  $DAEMON $NAME reload
-  ;;
-    status)
-  $DAEMON $NAME status
-  ;;
-    restart|force-reload)
-  $DAEMON $NAME restart
-  ;;
-  *)
-  echo "Usage: $0 {start|stop|status|restart|force-reload|reload}" >&2
-  exit 1
-  ;;
-esac
-
-
-eos
-      puts "Creating init script in '#{initd_path}'"
-      File.open(initd_path, 'w') do |file|
-        file.write(initd_content)
-      end
-      File.chmod(0755, initd_path)
-
-      unless config_dir.exist?
-        puts "Creating config directory '#{config_dir}'"
-        FileUtils.mkdir_p config_dir
-      end
-      unless config_pool.exist?
-        puts "Creating pools directory '#{config_pool}'"
-        FileUtils.mkdir_p config_pool
-      end
-      puts "Creating config file '#{config_path}'"
-      File.open(config_path, 'w') do |file|
-        file.write(config_content)
-      end
-
-      0
+    def log_path
+      Application.log_dir_path.join('wrapper.log')
     end
 
     def start
@@ -241,11 +135,11 @@ eos
       $stderr.puts("       #{php_name} install")
     end
 
-    def run
-      method_to_call = parse_arguments(ARGV)
+    def run(args = ARGV)
+      method_to_call = parse_arguments(args)
       exit send(method_to_call)
     rescue RuntimeError => e
-      @logger.warn(php_name) { e.message }
+      logger.warn(php_name) { e.message }
       help
       exit 3
     end
@@ -276,7 +170,7 @@ eos
       fail "unknown method #{args[1]}" \
         unless allowed_methods.include?(method_to_call)
 
-      @logger.info(php_name) { "calling method #{method_to_call}" }
+      logger.info(php_name) { "calling method #{method_to_call}" }
 
       method_to_call
     end
@@ -297,13 +191,17 @@ eos
       retval
     end
 
-    def pid_file
-      File.join('/var/run/', "#{@name}_#{php_name}.run")
+    def pid_dir_path
+      Pathname.new '/var/run'
+    end
+
+    def pid_path
+      pid_dir_path.join("#{@name}_#{php_name}.run")
     end
 
     def pid
-      return nil unless File.exist? pid_file
-      val = open(pid_file).read.strip.to_i
+      return nil unless File.exist? pid_path
+      val = open(pid_path).read.strip.to_i
       return nil if val == 0
       val
     end
@@ -311,12 +209,14 @@ eos
     def pid=(pid)
       if pid.nil?
         begin
-          File.unlink pid_file
+          File.unlink pid_path
         rescue Errno::ENOENT
-          @logger.debug("No pid file found: #{pid_file}")
+          logger.debug("No pid file found: #{pid_path}")
         end
       else
-        File.open pid_file, 'w' do |f|
+        dir = pid_path.parent
+        FileUtils.mkdir_p dir unless dir.directory?
+        File.open pid_path, 'w' do |f|
           f.write pid
         end
       end

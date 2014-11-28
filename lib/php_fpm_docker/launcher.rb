@@ -1,6 +1,5 @@
 # coding: utf-8
 require 'pathname'
-require 'logger'
 require 'php_fpm_docker/config_parser'
 require 'php_fpm_docker/logging'
 
@@ -14,10 +13,7 @@ module PhpFpmDocker
     def initialize(name, app) # rubocop:disable MethodLength
       @name = name
       @app = app
-
-      # Create log dir if needed
-      log_dir = Pathname.new('/var/log/php_fpm_docker')
-      FileUtils.mkdir_p log_dir unless log_dir.directory?
+      Application.log_path = Application.log_dir_path.join("#{@name}")
     end
 
     def test
@@ -92,6 +88,7 @@ module PhpFpmDocker
       @pools_old = @pools
       if pools.nil?
         @pools = pools_config
+        puts @pools.inspect
       else
         @pools = pools
       end
@@ -127,6 +124,7 @@ module PhpFpmDocker
             logger.warn(pool[:object].to_s) do
               "Failed to #{action}: #{e.message}"
             end
+            raise e
           end
         end
       else
@@ -149,9 +147,12 @@ module PhpFpmDocker
 
     # Get neccessary bind mounts
     def bind_mounts
-      mine = config[:main]['bind_mounts'].split(',') || []
-      mine = mine.map(&:strip)
-      (mine + @app.bind_mounts).uniq
+      mine = config['global']['bind_mounts']
+      parent = @app.bind_mounts
+      return parent if mine.nil?
+      mine = mine.split(',')
+      mine.map!(&:strip)
+      (mine + parent).uniq
     end
 
     def config_dir_path

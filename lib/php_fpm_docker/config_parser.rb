@@ -1,10 +1,12 @@
 # coding: utf-8
 require 'inifile'
 require 'pathname'
+require 'php_fpm_docker/logging'
 
 module PhpFpmDocker
   # Config file/directory handling
   class ConfigParser
+    include Logging
     def initialize(path, filter = nil)
       if path.is_a?(Pathname)
         @path = path
@@ -52,6 +54,9 @@ module PhpFpmDocker
       config = IniFile.new
       files.each do |file|
         config.merge!(IniFile.load(file, encoding: 'UTF-8'))
+      end
+      logger.debug do
+        "configs parsed: #{files.inspect}"
       end
       config
     end

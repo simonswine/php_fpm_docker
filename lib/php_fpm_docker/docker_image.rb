@@ -68,7 +68,8 @@ module PhpFpmDocker
       php_version_re = /PHP ([A-Za-z0-9\.\-\_]+) /
       php_version_output = detect_output[2..-1].join("\n")
       match = php_version_re.match(php_version_output)
-      match[1]
+      return match[1] unless match.nil?
+      nil
     end
 
     def php_path
@@ -80,6 +81,7 @@ module PhpFpmDocker
         m = /^#{sym.to_s}=(.*)/.match line
         return m[1] unless m.nil?
       end
+      nil
     end
 
     private

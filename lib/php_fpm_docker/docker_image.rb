@@ -6,9 +6,16 @@ module PhpFpmDocker
   # Wraps the docker connection
   class DockerImage
     include Logging
+    attr_reader :name
+    def self.available?
+      Docker.version
+      true
+    rescue Excon::Errors::SocketError
+      false
+    end
 
-    def initialize(image_name)
-      @image_name = image_name
+    def initialize(name)
+      @name = name
     end
 
     def id
@@ -21,13 +28,13 @@ module PhpFpmDocker
 
     # Fetches image id form docker server
     def fetch_image
-      image = Docker::Image.get(@image_name)
+      image = Docker::Image.get(@name)
       logger.info do
-        "Docker image id=#{image.id[0..7]} name=#{@image_name}"
+        "fetched docker image id=#{image.id[0..7]}"
       end
       image
     rescue Docker::Error::NotFoundError
-      raise "Docker_image '#{@image_name}' not found"
+      raise "Docker_image '#{@name}' not found"
     rescue Excon::Errors::SocketError => e
       raise "Docker connection could not be established: #{e.message}"
     end
@@ -37,79 +44,81 @@ module PhpFpmDocker
       DockerContainer.cmd(self, *args)
     end
 
-    # Docker init
-    def test_docker_cmd(cmd) # rubocop:disable MethodLength
-      # retry this block 3 times
-      tries ||= 3
-
-      opts = docker_opts
-      opts['Cmd'] = cmd
-      dict = {}
-
-      # Set timeout
-      Docker.options[:read_timeout] = 2
-
-      cont = Docker::Container.create(opts)
-      cont.start
-      output = cont.attach
-      dict[:ret_val] = cont.wait(5)['StatusCode']
-      cont.delete(force: true)
-
-      dict[:stdout] = output[0].first
-      dict[:stderr] = output[1].first
-
-      # Set timeout
-      Docker.options[:read_timeout] = 15
-
-      logger.debug(to_s) do
-        "cmd=#{cmd.join(' ')} ret_val=#{dict[:ret_val]}" \
-        " stdout=#{dict[:stdout]} stderr=#{dict[:stderr]}"
-      end
-
-      dict
-    rescue Docker::Error::TimeoutError => e
-      if (tries -= 1) > 0
-        cont.delete(force: true) if cont.nil?
-        logger.debug(to_s) { 'ran into timeout retry' }
-        retry
-      end
-      raise e
+    def to_s
+      "#<DockerImage:#{name}>"
     end
 
-    # Testing the docker image if i can be used
-    def test_docker_image # rubocop:disable MethodLength
-      # Test possible php commands
-      ['php-cgi', 'php5-cgi', 'php', 'php5'].each do |php_cmd|
-        result = test_docker_cmd [:which, php_cmd]
+    def detect_output
+      @detect_output ||= detect_fetch
+    end
 
-        next unless result[:ret_val] == 0
+    def spawn_fcgi_path
+      detect_find_path :spawn_fcgi_path
+    end
 
-        php_cmd_path = result[:stdout].strip
+    def php_fcgi?
+      php_version_re = /PHP ([A-Za-z0-9\.\-\_]+) \(cgi-fcgi\)/
+      php_version_output = detect_output[2..-1].join("\n")
+      match = php_version_re.match(php_version_output)
+      return false if match.nil?
+      true
+    end
 
-        result = test_docker_cmd [php_cmd_path, '-v']
+    def php_version
+      php_version_re = /PHP ([A-Za-z0-9\.\-\_]+) /
+      php_version_output = detect_output[2..-1].join("\n")
+      match = php_version_re.match(php_version_output)
+      match[1]
+    end
 
-        next unless result[:ret_val] == 0
-        php_version_re = /PHP [A-Za-z0-9\.\-\_]+ \(cgi-fcgi\)/
-        next if php_version_re.match(result[:stdout]).nil?
+    def php_path
+      detect_find_path :php_path
+    end
 
-        @php_cmd_path = php_cmd_path
-        break
+    def detect_find_path(sym)
+      detect_output.each do |line|
+        m = /^#{sym.to_s}=(.*)/.match line
+        return m[1] unless m.nil?
       end
-      fail 'No usable fast-cgi enabled php found in image' if @php_cmd_path.nil?
-
-      # Test if spawn-fcgi exists
-      result = test_docker_cmd [:which, 'spawn-fcgi']
-      fail 'No usable spawn-fcgi found in image' unless result[:ret_val] == 0
-      @spawn_cmd_path = result[:stdout].strip
     end
 
-    def docker_image_get
+    private
+
+    def detect_fetch
+      output = cmd(['/bin/sh', '-c', detect_cmd])
+      output[:stdout].split("\n")
     end
 
-    def docker_opts
-      {
-        'Image' => @docker_image.id
-      }
+    def detect_cmd
+      cmds = []
+      cmds << detect_binary_shell(
+        :spawn_fcgi,
+        ['spawn-fcgi']
+      )
+      cmds << detect_binary_shell(
+        :php,
+        ['php-cgi', 'php5-cgi', 'php', 'php5']
+      )
+      cmds << "[ -n \"${PHP_PATH}\" ] && ${PHP_PATH} -v"
+      cmds.join ';'
+    end
+
+    def detect_binary_shell(name, basenames)
+      var = "#{name.upcase}_PATH"
+      which = "#{var}=$(which %s 2> /dev/null)"
+      template = "[ $? -eq 0 ] || #{which}"
+
+      # First element
+      ret_val = [which % basenames.first]
+
+      # Loop through basenames from second
+      basenames[1..-1].each do |base|
+        ret_val << template % base
+      end
+
+      ret_val << "echo \"#{var.downcase}=${#{var}}\""
+
+      ret_val
     end
   end
 end

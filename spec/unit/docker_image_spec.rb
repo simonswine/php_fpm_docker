@@ -5,7 +5,7 @@ describe PhpFpmDocker::DockerImage do
   before(:example) do
   end
   let (:a_i_only) do
-    described_class.new(@image_name ||= 'image/name')
+    described_class.new(@name ||= 'image/name')
   end
   let (:a_i) do
     mock_logger(a_i_only)
@@ -15,8 +15,8 @@ describe PhpFpmDocker::DockerImage do
     instance_double(Docker::Image)
   end
   describe '#initialize' do
-    it 'should set @image_name' do
-      expect(inst_get(:@image_name)).to eq(@image_name)
+    it 'should set @name' do
+      expect(inst_get(:@name)).to eq(@name)
     end
   end
   describe '#image' do
@@ -44,7 +44,7 @@ describe PhpFpmDocker::DockerImage do
     end
     it 'should call and docker image' do
       a_i
-      expect(Docker::Image).to upstream.with(@image_name)
+      expect(Docker::Image).to upstream.with(@name)
       expect(method).to eq(dbl_image)
     end
     it 'should catch not found' do

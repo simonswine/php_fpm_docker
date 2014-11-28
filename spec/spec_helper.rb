@@ -1,7 +1,9 @@
 require 'coveralls'
 require 'helper'
 
-Coveralls.wear!
+Coveralls.wear! do
+  add_filter 'spec/'
+end
 
 # Set load path for this module
 dir = File.expand_path(File.join(File.dirname(__FILE__),'..'))

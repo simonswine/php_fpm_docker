@@ -20,6 +20,15 @@ describe PhpFpmDocker::DockerContainer do
   end
   let (:dbl_image) do
   end
+  describe '.cmd' do
+    it 'forwads to new container and creates it' do
+      c = instance_double(PhpFpmDocker::DockerContainer)
+      expect(PhpFpmDocker::DockerContainer).to receive(:new).and_return(c)
+      expect(c).to receive(:create).with(:args)
+      expect(c).to receive(:output).and_return(:output)
+      expect(described_class.cmd(:image,:args)).to eq(:output)
+    end
+  end
   describe '#initialize' do
     it 'should set @image_name' do
       expect(inst_get(:@image_name)).to eq(@image_name)
@@ -33,6 +42,45 @@ describe PhpFpmDocker::DockerContainer do
   describe '#options' do
     it 'should include the right image id' do
       expect(method).to include('Image' => @image.id)
+    end
+  end
+  describe '#output' do
+    after(:example) do
+      allow(a_i).to receive(:method_missing) do |sym, *args, &block|
+        if sym == :attach
+          [@stdout, @stderr]
+        elsif sym == :wait
+          {'StatusCode' => @return_code}
+        elsif sym == :delete
+          expect(args.first).to include(force: true)
+          nil
+        elsif sym == :start
+          nil
+        else
+          fail "unexpected method #{sym}"
+        end
+      end
+      expect(method).to eq(@result)
+    end
+    it 'should manage missing stderr' do
+      @stdout = ["stdout1\n","stdout2\n"]
+      @stderr = []
+      @return_code = 666
+      @result = {
+        :stderr => nil,
+        :stdout => "stdout1\nstdout2\n",
+        :return_code => @return_code
+      }
+    end
+    it 'should manage missing stdout' do
+      @stderr = ["stderr1\n","stderr2\n"]
+      @stdout = []
+      @return_code = 555
+      @result = {
+        :stderr => "stderr1\nstderr2\n",
+        :stdout => nil,
+        :return_code => @return_code
+      }
     end
   end
   describe '#create' do

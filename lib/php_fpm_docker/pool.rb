@@ -3,10 +3,13 @@ require 'pp'
 require 'inifile'
 require 'docker'
 require 'securerandom'
+require 'php_fpm_docker/logging'
 
 module PhpFpmDocker
   # A pool represent a single isolated PHP web instance
   class Pool
+    include Logging
+
     attr_reader :enabled
     def initialize(opts)
       @config = opts[:config]
@@ -14,21 +17,26 @@ module PhpFpmDocker
       @name = opts[:name]
     end
 
-    def docker_create_opts
-      volumes = {}
-      bind_mounts.each do |d|
-        volumes[d] = {}
-      end
-
-      {
+    def docker_create_options
+      ret_val = {
         'name' => container_name,
-        'Image' => @launcher.docker_image.id,
-        'Volumes' => volumes,
+        'Cmd' => spawn_command + ['--'] + php_command,
         'WorkingDir' => '/'
       }
+
+      bind_mounts.each do |d|
+        begin
+          ret_val['Volumes'][d] = {}
+        rescue NoMethodError
+          ret_val['Volumes'] = {}
+          retry
+        end
+      end
+
+      ret_val
     end
 
-    def docker_start_opts
+    def docker_start_options
       binds = bind_mounts.map do |d|
         "#{d}:#{d}"
       end
@@ -129,37 +137,36 @@ module PhpFpmDocker
       [@launcher.php_cmd_path] + admin_options
     end
 
+    def container
+      return @container unless @container.nil?
+      @container = @launcher.docker_image.create(docker_create_options)
+      @container
+    end
+
     def start
       @enabled = true
-      create_opts = docker_create_opts
-      create_opts['Cmd'] = spawn_command + ['--'] + php_command
+      container.start(docker_start_options)
+    end
 
-      @container = Docker::Container.create(create_opts)
-      @container.start(docker_start_opts)
+    def running?
+      return false if @container.nil?
+      container.running?
     end
 
     def container_name
       @container_name ||= "#{@name}_#{SecureRandom.hex[0..11]}"
     end
 
-    def container_running?
-      return false if @container.nil?
-      begin
-        return @container.info['State']['Running']
-      rescue NoMethodError
-        return false
-      end
-    end
-
     def check
-      return unless @enabled && !container_running?
+      return unless @enabled
+      return if running?
       stop
       start
     end
 
     def stop
       @enabled = false
-      @container.delete(force: true) unless @container.nil?
+      container.delete(force: true) unless @container.nil?
     end
 
     def to_s

@@ -55,6 +55,36 @@ module Helper
     end
   end
 
+  def dbl_launcher_options
+    {
+      :bind_mounts => ['/mnt/bind'],
+      :web_path => '/var/webpath',
+      :docker_image => dbl_docker_image,
+      :spawn_cmd_path => '/usr/bin/fcgi-bin',
+      :php_cmd_path => '/usr/bin/php',
+    }
+  end
+
+  def dbl_launcher
+    return @dbl_launcher unless @dbl_launcher.nil?
+    @dbl_launcher = instance_double('PhpFpmDocker::Launcher', dbl_launcher_options)
+  end
+
+  def dbl_docker_image
+    return @dbl_docker_image unless @dbl_docker_image.nil?
+    @dbl_docker_image = instance_double('PhpFpmDocker::DockerImage',
+        :create => nil,
+    )
+    @dbl_docker_image
+  end
+
+  def dbl_docker_container
+    return @dbl_docker_container unless @dbl_docker_container.nil?
+    @dbl_docker_container = double('PhpFpmDocker::DockerContainer',
+        :running? => nil,
+    )
+    @dbl_docker_container
+  end
 
   def dbl_logger
     return @dbl_logger unless @dbl_logger.nil?
@@ -63,6 +93,28 @@ module Helper
       allow(logger).to receive(loglevel)
     end
     @dbl_logger ||= logger
+  end
+
+  def mock_users
+    allow(Etc).to receive(:getpwnam) do |user|
+      uid = @users.select do |key, value|
+        value == user
+      end.first.first.to_i
+      d = double(user)
+      allow(d).to receive(:uid).and_return(uid)
+      d
+    end
+  end
+
+  def mock_groups
+    allow(Etc).to receive(:getgrnam) do |group|
+      gid = @groups.select do |key, value|
+        value == group
+      end.first.first.to_i
+      d = double(group)
+      allow(d).to receive(:gid).and_return(gid)
+      d
+    end
   end
 
   def mock_logger(c)

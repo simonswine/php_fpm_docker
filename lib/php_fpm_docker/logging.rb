@@ -6,11 +6,12 @@ module PhpFpmDocker
   module Logging
     def logger
       return @logger if @logger
-      if Application.log_path.is_a? Pathname
-        dir = Application.log_path.parent
+      path = ::PhpFpmDocker::Application.log_path
+      if path.is_a? Pathname
+        dir = path.parent
         FileUtils.mkdir_p dir unless dir.directory?
       end
-      @logger = ::Logger.new Application.log_path
+      @logger = ::Logger.new path
       @logger.formatter = proc { |severity, datetime, _progname, msg|
         sprintf("%s [%-5s] [%-40.40s] %s\n", datetime, severity, to_s, msg)
       }

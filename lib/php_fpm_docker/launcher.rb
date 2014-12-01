@@ -88,7 +88,6 @@ module PhpFpmDocker
       @pools_old = @pools
       if pools.nil?
         @pools = pools_config
-        puts @pools.inspect
       else
         @pools = pools
       end
@@ -124,7 +123,6 @@ module PhpFpmDocker
             logger.warn(pool[:object].to_s) do
               "Failed to #{action}: #{e.message}"
             end
-            raise e
           end
         end
       else
@@ -147,10 +145,14 @@ module PhpFpmDocker
 
     # Get neccessary bind mounts
     def bind_mounts
-      mine = config['global']['bind_mounts']
+      begin
+        mine = config['global']['bind_mounts']
+        mine = mine.split(',')
+      rescue NoMethodError
+        mine = nil
+      end
       parent = @app.bind_mounts
       return parent if mine.nil?
-      mine = mine.split(',')
       mine.map!(&:strip)
       (mine + parent).uniq
     end

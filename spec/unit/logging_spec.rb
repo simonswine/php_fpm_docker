@@ -11,7 +11,9 @@ describe PhpFpmDocker::Logging do
     end
     before(:example) do
       @stringio = StringIO.new
-      stub_const("PhpFpmDocker::LOG_FILE", @stringio)
+      @dbl_app = double('PhpFpmDocker::Application')
+      allow(@dbl_app).to receive(:log_path).and_return(@stringio)
+      stub_const("PhpFpmDocker::Application", @dbl_app)
     end
     after(:example) do
       expect(@stringio.string).to match(/message1/)

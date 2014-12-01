@@ -3,7 +3,12 @@ require 'php_fpm_docker/launcher'
 
 describe PhpFpmDocker::Launcher do
   before(:example) {
-    @dbl_pool = class_double('PhpFpmDocker::Pool').as_stubbed_const()
+    @dbl_c_pool = class_double('PhpFpmDocker::Pool').as_stubbed_const()
+
+    # Mock Application
+    @dbl_c_application = class_double('PhpFpmDocker::Application').as_stubbed_const()
+    allow(@dbl_c_application).to receive(:log_dir_path).and_return(Pathname.new '/tmp/test123/')
+    allow(@dbl_c_application).to receive(:log_path=)
 
     # Fileutils
     @orig_fileutils = FileUtils
@@ -182,7 +187,7 @@ describe PhpFpmDocker::Launcher do
       compare
     }
     before(:example) {
-      allow(@dbl_pool).to receive(:new).and_return(:object)
+      allow(@dbl_c_pool).to receive(:new).and_return(:object)
     }
     it 'should not fail with nil value' do
       @pools = nil
@@ -200,7 +205,7 @@ describe PhpFpmDocker::Launcher do
         :hash2 => {:name => :name2, :config => :config2},
         :hash3 => {:object => :object3}
       }
-      expect(@dbl_pool).to receive(:new) do |args|
+      expect(@dbl_c_pool).to receive(:new) do |args|
         expect(args).to have_key(:launcher)
         expect(args).to include(@pools[:hash2])
       end.and_return(:object2)
@@ -215,7 +220,7 @@ describe PhpFpmDocker::Launcher do
         :hash1 => {:object => :object1},
         :hash2 => {:object => :object2},
       }
-      expect(@dbl_pool).not_to receive(:new)
+      expect(@dbl_c_pool).not_to receive(:new)
       set_method_compare
     end
   end
@@ -365,7 +370,7 @@ describe PhpFpmDocker::Launcher do
       @bind_mounts_mine = ['mine1', ' mine2 ', 'dup1 ', 'dup2' ]
     }
     let(:set_mine){
-      allow(a_i).to receive(:config).and_return({:main => {'bind_mounts' => @bind_mounts_mine.join(',')}})
+      allow(a_i).to receive(:config).and_return({'global' => {'bind_mounts' => @bind_mounts_mine.join(',')}})
     }
     let(:set_apps){
       expect(@dbl_app).to receive(:bind_mounts).and_return(@bind_mounts_apps.dup)
@@ -388,6 +393,11 @@ describe PhpFpmDocker::Launcher do
       set_apps
       result = method
       expect(result).to contain_exactly(*result.uniq)
+    end
+    it 'does not fail if not configured' do
+      allow(a_i).to receive(:config).and_return({})
+      set_apps
+      expect(method).to contain_exactly(*@bind_mounts_apps)
     end
   end
   describe 'join functions' do

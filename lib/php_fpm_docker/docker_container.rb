@@ -7,10 +7,15 @@ module PhpFpmDocker
   class DockerContainer
     include Logging
 
-    def self.cmd(image, *args)
+    def self.cmd(*args)
+      c = DockerContainer.create(*args)
+      c.output
+    end
+
+    def self.create(image, *args)
       c = DockerContainer.new(image)
       c.create(*args)
-      c.output
+      c
     end
 
     def initialize(image)

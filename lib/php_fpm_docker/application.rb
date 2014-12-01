@@ -4,19 +4,17 @@ require 'php_fpm_docker/pool'
 require 'php_fpm_docker/logging'
 
 module PhpFpmDocker
-
   # Application that is used as init script
   class Application # rubocop:disable ClassLength
-
-    @@log_path = nil
+    @log_path = nil
 
     def self.log_path
-      @@log_path ||= log_dir_path.join('wrapper.log')
+      @log_path ||= log_dir_path.join('wrapper.log')
     end
 
     def self.log_path=(path)
-      # TODO: Check if input is pathname
-      @@log_path = path
+      path = Pathname.new path unless path.is_a? Pathname
+      @log_path = path
     end
 
     def self.log_dir_path
@@ -30,11 +28,6 @@ module PhpFpmDocker
     def initialize
       @name = 'php_fpm_docker'
       @longname = 'PHP FPM Docker Wrapper'
-    end
-
-
-    def log_path
-      Application.log_dir_path.join('wrapper.log')
     end
 
     def start
@@ -180,6 +173,7 @@ module PhpFpmDocker
       [
         :install,
         :run,
+        :logger,
         :bind_mounts,
         :config_dir_path,
         :web_path,

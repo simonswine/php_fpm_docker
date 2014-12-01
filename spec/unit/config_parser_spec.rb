@@ -6,7 +6,9 @@ describe PhpFpmDocker::ConfigParser do
   }
   let (:a_i_only) do
     @path ||= Pathname.new '/tmp/etc/config.ini'
-    described_class.new(@path, @filter)
+    i=described_class.new(@path, @filter)
+    mock_logger i
+    i
   end
   let (:a_i) do
     a_i_only

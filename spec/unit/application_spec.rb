@@ -3,23 +3,61 @@ require 'php_fpm_docker/application'
 
 describe PhpFpmDocker::Application do
   before(:example) {
-    @dbl_logger_instance = double
-    @dbl_logger = class_double('Logger').as_stubbed_const()
-    allow(@dbl_logger).to receive(:new).and_return(@dbl_logger_instance)
-
     @dbl_fileutils = class_double('FileUtils').as_stubbed_const()
     allow(@dbl_fileutils).to receive(:mkdir_p)
   }
 
   let (:a_i){
-    described_class.new
-  }
-  let (:a_c){
-    described_class
+    i=described_class.new
+    mock_logger(i)
+    i
   }
   let (:pid_default) {
     1234
   }
+
+  describe '.log_path' do
+    let(:method) do
+      described_class.log_path
+    end
+    it 'should show class inst variable' do
+      described_class.instance_variable_set(:@log_path, Pathname.new('/tmp/test/test.log'))
+      expect(method).to eq(Pathname.new '/tmp/test/test.log')
+    end
+    it 'should append wrapper.log to default dir' do
+      described_class.instance_variable_set(:@log_path, nil)
+      expect(described_class).to receive(:log_dir_path).and_return(Pathname.new '/tmp/test')
+      expect(method).to eq(Pathname.new '/tmp/test/wrapper.log')
+    end
+  end
+
+  describe '.log_path=' do
+    let(:method) do
+      described_class.log_path = @args.dup
+    end
+    it 'should take a String arg' do
+      @args = '/tmp/test/test.log'
+      method
+      log_path = described_class.instance_variable_get(:@log_path)
+      expect(log_path.to_s).to eq(@args)
+      expect(log_path).to be_a(Pathname)
+    end
+    it 'should take a Pathname arg' do
+      @args = Pathname.new '/tmp/test/test.log'
+      method
+      log_path = described_class.instance_variable_get(:@log_path)
+      expect(log_path).to eq(@args)
+    end
+  end
+
+  describe '.log_dir_path' do
+    let(:method) do
+      described_class.log_dir_path
+    end
+    it 'should return a pathname' do 
+      expect(method).to be_a(Pathname)
+    end
+  end
 
   describe '#initialize' do
     it "not raise error" do
@@ -27,9 +65,6 @@ describe PhpFpmDocker::Application do
     end
   end
   describe '#help' do
-    let (:method) {
-      a_i.instance_eval{ help }
-    }
     it "return help" do
       expect(a_i).to receive(:allowed_methods).and_return([:valid])
       expect{method}.to output(/valid/).to_stderr
@@ -51,7 +86,7 @@ describe PhpFpmDocker::Application do
       expect{method}.not_to raise_error
     end
     it "incorrect arguments" do
-      allow(@dbl_logger_instance).to receive(:warn).with('php_name')
+      allow(dbl_logger).to receive(:warn).with('php_name')
       expect(a_i).to receive(:parse_arguments).with(@argv).and_raise(RuntimeError, 'wrong')
       expect(a_i).to receive(:help)
       expect(a_i).to receive(:exit).with(3)
@@ -77,7 +112,7 @@ describe PhpFpmDocker::Application do
     it "args=['name','valid']" do
       valid_args
       @args = ['name','valid']
-      expect(@dbl_logger_instance).to receive(:info)
+      expect(dbl_logger).to receive(:info)
       expect(method).to eq(:valid)
       expect(a_i.instance_variable_get(:@php_name)).to eq('name')
     end
@@ -100,26 +135,22 @@ describe PhpFpmDocker::Application do
     end
   end
   describe '#pid' do
-    let (:method) {
-      a_i.instance_eval{ pid }
-    }
-    let (:file) {
-      Tempfile.new('foo')
-    }
+    before (:example) do
+      @file = Tempfile.new('pid_file')
+      allow(a_i).to receive(:pid_path).and_return(Pathname.new(@file.path))
+    end
     it 'return pid from file if exists and int' do
-      file.write(pid_default.to_s)
-      file.flush
-      allow(a_i).to receive(:pid_file).and_return(file.path)
+      @file.write(pid_default.to_s)
+      @file.flush
       expect(method).to eq(pid_default)
     end
     it 'return nil without pid file' do
-      allow(a_i).to receive(:pid_file).and_return('/tmp/not/existing')
+      @file.delete
       expect(method).to eq(nil)
     end
     it 'return nil pid from file if exists and no int' do
-      file.write("fuckyeah!")
-      file.flush
-      allow(a_i).to receive(:pid_file).and_return(file.path)
+      @file.write("fuckyeah!")
+      @file.flush
       expect(method).to eq(nil)
     end
   end
@@ -134,7 +165,7 @@ describe PhpFpmDocker::Application do
         a_i.instance_exec(nil) {|x| self.pid=456 }
       }
       after(:example) do
-        allow(a_i).to receive(:pid_file).and_return(@file.path)
+        allow(a_i).to receive(:pid_path).and_return(Pathname.new(@file.path))
         method
         expect(open(@file.path).read.strip.to_i).to eq(456)
       end
@@ -149,15 +180,15 @@ describe PhpFpmDocker::Application do
         a_i.instance_exec(nil) {|x| self.pid=x }
       }
       it 'pid file will removed if exists' do
-        allow(a_i).to receive(:pid_file).and_return(@file.path)
+        allow(a_i).to receive(:pid_path).and_return(@file.path)
         method
         expect(File.exist?(@file.path)).to eq(false)
       end
       it 'pid file not existing' do
         path = @file.path
         @file.delete
-        expect(@dbl_logger_instance).to receive(:debug).with(/No pid file found/)
-        allow(a_i).to receive(:pid_file).and_return(path)
+        expect(dbl_logger).to receive(:debug).with(/No pid file found/)
+        allow(a_i).to receive(:pid_path).and_return(path)
         method
       end
     end

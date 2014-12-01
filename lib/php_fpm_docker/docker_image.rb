@@ -44,6 +44,10 @@ module PhpFpmDocker
       DockerContainer.cmd(self, *args)
     end
 
+    def create(*args)
+      DockerContainer.create(self, *args)
+    end
+
     def to_s
       "#<DockerImage:#{name}>"
     end

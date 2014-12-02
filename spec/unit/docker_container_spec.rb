@@ -83,6 +83,23 @@ describe PhpFpmDocker::DockerContainer do
       }
     end
   end
+  describe '#method_missing' do
+    before(:example) do
+      @cont = instance_double(Docker::Container)
+      allow(a_i).to receive(:container).and_return(@cont)
+    end
+    context 'forward methods' do
+      [:start, :stop, :delete, :wait, :logs, :attach].each do |method|
+        it "should forward :#{method}" do
+          expect(@cont).to receive(method).with(:args)
+          a_i.send(method, :args)
+        end
+      end
+      it "should not forward :not_existing_method" do
+        expect{a_i.send(:not_existing_method, :args)}.to raise_error(NoMethodError)
+      end
+    end
+  end
   describe '#create' do
     before(:example) do
       a_i
@@ -90,33 +107,80 @@ describe PhpFpmDocker::DockerContainer do
         'Image' => @image.id,
         'Cmd' => ['test','me'],
       }
-      @input = deep_clone @output['Cmd']
+      @input = { 'Cmd' => deep_clone(@output['Cmd']) }
       @opts = {}
     end
     context 'creates container' do
       after(:example) do
         expect(Docker::Container).to receive(:create).with(deep_clone @output).and_return(:container)
-        expect(method(@input,@opts)).to eq(:container)
-      end
-      it 'creates container' do
+        expect(method(@input)).to eq(:container)
       end
       it 'creates container and appends options' do
-        @opts['name'] = 'name1'
+        @input['name'] = 'name1'
         @output['name'] = 'name1'
       end
+      it 'creates container and appends options' do
+        @input['name'] = 'name1'
+        @output['name'] = 'name1'
+      end
+      it 'creates container with array argument' do
+        @input = @input['Cmd']
+      end
+      it 'creates container with hash argument' do
+      end
       it 'creates container and string only cmd array' do
+        @input['Cmd'] << 100
         @output['Cmd'] << '100'
-        @input << 100
       end
       it 'overrides default options' do
-        @opts['Image'] = 'dead'
+        @input['Image'] = 'dead'
         @output['Image'] = 'dead'
+      end 
+      it 'logs container creation' do
+        expect(dbl_logger).to receive(:debug) do |&block|
+          expect(block.call).to match(/created container/)
+        end
       end
     end
-    it 'fail if nil cmd' do
+    it 'fail if nil input' do
       @input = nil
-      @fail = true
-      expect{method(@input,@opts)}.to raise_error(ArgumentError, /no array/)
+      expect{method(@input)}.to raise_error(ArgumentError, /has to be a hash/)
+    end
+    it 'fail if nil cmd' do
+      @input['Cmd'] = nil
+      expect{method(@input)}.to raise_error(ArgumentError, /no array/)
+    end
+  end
+  describe '#to_s' do
+    before(:example) do
+      expect(a_i).to receive(:id).and_return(:id1)
+      d = instance_double('DockerImage', :name => :name1)
+      inst_set(:@image, d)
+    end
+    after(:example) do
+      result = method
+      expect(result).to be_a(String)
+      expect(result).to match(/id1/)
+      expect(result).to match(/name1/)
+    end
+    it 'should return string repr' do
+    end
+  end
+  describe '#id' do
+    before(:example) do
+      @dbl_container = instance_double(Docker::Container)
+    end
+    after(:example) do
+      expect(a_i).to receive(:container).and_return(@dbl_container)
+      expect(method).to eq(@result)
+    end
+    it 'should return id' do
+      allow(@dbl_container).to receive(:id).and_return(:id1)
+      @result = :id1
+    end
+    it 'should handle errors' do
+      allow(@dbl_container).to receive(:id).and_raise(RuntimeError,:test_error)
+      @result = 'unknown'
     end
   end
 end

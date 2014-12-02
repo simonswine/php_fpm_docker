@@ -28,6 +28,7 @@ module PhpFpmDocker
     def initialize
       @name = 'php_fpm_docker'
       @longname = 'PHP FPM Docker Wrapper'
+      @launchers = []
     end
 
     def start
@@ -41,6 +42,7 @@ module PhpFpmDocker
 
       # init
       l = Launcher.new php_name, self
+      @launchers << l
 
       # run daemon
       self.pid = l.run

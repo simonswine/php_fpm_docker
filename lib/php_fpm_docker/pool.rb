@@ -111,7 +111,7 @@ module PhpFpmDocker
     # Build the spawn command
     def spawn_command
       [
-        @launcher.spawn_cmd_path,
+        @launcher.docker_image.spawn_fcgi_path,
         '-s', @config['listen'],
         '-U', listen_uid.to_s,
         '-G', listen_gid.to_s,
@@ -134,7 +134,7 @@ module PhpFpmDocker
 
       end
 
-      [@launcher.php_cmd_path] + admin_options
+      [@launcher.docker_image.php_path] + admin_options
     end
 
     def container

@@ -1,7 +1,13 @@
 require 'coveralls'
 require 'helper'
+require 'simplecov'
+require 'coveralls'
 
-Coveralls.wear! do
+SimpleCov.formatter = SimpleCov::Formatter::MultiFormatter[
+  Coveralls::SimpleCov::Formatter,
+  SimpleCov::Formatter::HTMLFormatter,
+]
+SimpleCov.start do
   add_filter 'spec/'
 end
 

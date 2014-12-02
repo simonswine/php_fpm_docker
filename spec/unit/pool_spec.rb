@@ -70,7 +70,7 @@ describe PhpFpmDocker::Pool do
       @list = a_i.spawn_command
     }
     it 'list include spawn_fcgi' do
-      expect(@list).to include(dbl_launcher.spawn_cmd_path)
+      expect(@list).to include(dbl_docker_image.spawn_fcgi_path)
     end
     it 'list include socket path' do
       expect(@list).to include(default_config['listen'])
@@ -108,7 +108,7 @@ describe PhpFpmDocker::Pool do
       @list = method
     }
     it 'list include php cmd' do
-      expect(@list).to include(dbl_launcher.php_cmd_path)
+      expect(@list).to include(dbl_docker_image.php_path)
     end
     it 'list is flat' do
       expect(@list.flatten).to eq(@list)

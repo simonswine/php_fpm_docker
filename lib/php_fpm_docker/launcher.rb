@@ -1,6 +1,7 @@
 # coding: utf-8
 require 'pathname'
 require 'php_fpm_docker/config_parser'
+require 'php_fpm_docker/docker_image'
 require 'php_fpm_docker/logging'
 
 module PhpFpmDocker
@@ -13,6 +14,8 @@ module PhpFpmDocker
     def initialize(name, app) # rubocop:disable MethodLength
       @name = name
       @app = app
+
+      # Set log file for all sub objects
       Application.log_path = Application.log_dir_path.join("#{@name}")
     end
 
@@ -120,8 +123,13 @@ module PhpFpmDocker
           begin
             pool[:object].send(action)
           rescue => e
-            logger.warn(pool[:object].to_s) do
+            logger.warn do
               "Failed to #{action}: #{e.message}"
+            end
+            e.backtrace.each do |line|
+              logger.debug do
+                line
+              end
             end
           end
         end
@@ -185,11 +193,11 @@ module PhpFpmDocker
 
     def config
       @config ||= ConfigParser.new(config_path)
-      @config.config
+      @config.config['global']
     end
 
     def docker_image
-      @docker_image ||= docker_image_get
+      @docker_image ||= DockerImage.new(config['image_name'])
     end
   end
 end

@@ -17,6 +17,12 @@ module PhpFpmDocker
       DockerImage.new @image_name
     end
     describe 'docker_integration' do
+      before(:example) do
+        # Mock log dir
+        allow(Application).to receive(:log_path).and_return(Pathname.new(
+          File.expand_path(File.join(File.dirname(__FILE__), '..', '..', 'tmp', 'rspec.log'))
+        ))
+      end
       describe DockerImage do
         let(:a_i) do
           image

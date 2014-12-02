@@ -90,14 +90,22 @@ module PhpFpmDocker
       end
     end
 
-    def create(cmd, opts = {})
+    def create(opts = {})
+      opts = { 'Cmd' => opts } if opts.is_a? Array
+
+      fail(
+        ArgumentError,
+        'Argument has to be a hash or array of strings'
+      ) if opts.nil?
+
       my_opts = options
       my_opts.merge! opts
 
-      fail(ArgumentError, "cmd is no array: #{cmd}") unless cmd.is_a? Array
+      fail(ArgumentError, "cmd is no array: #{my_opts['Cmd']}") \
+        unless my_opts['Cmd'].is_a? Array
 
       # ensure there are only strings
-      my_opts['Cmd'] = cmd.map(&:to_s)
+      my_opts['Cmd'] = my_opts['Cmd'].map(&:to_s)
 
       @container = Docker::Container.create(my_opts)
       logger.debug do

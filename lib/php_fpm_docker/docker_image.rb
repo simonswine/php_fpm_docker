@@ -1,6 +1,7 @@
 # coding: utf-8
 require 'docker'
 require 'php_fpm_docker/logging'
+require 'php_fpm_docker/docker_container'
 
 module PhpFpmDocker
   # Wraps the docker connection
@@ -91,7 +92,7 @@ module PhpFpmDocker
     private
 
     def detect_fetch
-      output = cmd(['/bin/sh', '-c', detect_cmd])
+      output = cmd('Cmd' => ['/bin/sh', '-c', detect_cmd])
       output[:stdout].split("\n")
     end
 

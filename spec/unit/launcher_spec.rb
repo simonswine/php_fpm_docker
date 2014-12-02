@@ -27,37 +27,6 @@ describe PhpFpmDocker::Launcher do
   let (:a_c){
     described_class
   }
-  xdescribe '#initialize' do
-    let (:method){
-      expect_any_instance_of(described_class).to receive(:test)
-      a_i_only
-    }
-    it 'should not raise error' do
-      expect{method}.not_to raise_error
-    end
-  end
-  xdescribe '#test' do
-    before(:example) {
-      expect_any_instance_of(described_class).to receive(:test).and_call_original
-      @downstream_methods = [:test_directories]
-    }
-    let (:method){
-      a_i_only
-    }
-    it 'should call down stream functions' do
-      @downstream_methods.each do |m|
-        expect_any_instance_of(described_class).to receive(m)
-      end
-      method
-    end
-    it 'should exit on runtime errors' do
-      @downstream_methods.each do |m|
-        allow_any_instance_of(described_class).to receive(m).and_raise(RuntimeError,"error")
-      end
-      expect_any_instance_of(described_class).to receive(:exit).with(1)
-      method
-    end
-  end
   describe '#run' do
     before (:example) {
       @pid = 12345

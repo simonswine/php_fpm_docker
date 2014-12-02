@@ -60,8 +60,6 @@ module Helper
       :bind_mounts => ['/mnt/bind'],
       :web_path => '/var/webpath',
       :docker_image => dbl_docker_image,
-      :spawn_cmd_path => '/usr/bin/fcgi-bin',
-      :php_cmd_path => '/usr/bin/php',
     }
   end
 
@@ -74,6 +72,8 @@ module Helper
     return @dbl_docker_image unless @dbl_docker_image.nil?
     @dbl_docker_image = instance_double('PhpFpmDocker::DockerImage',
         :create => nil,
+        :spawn_fcgi_path => '/usr/bin/fcgi-bin',
+        :php_path => '/usr/bin/php',
     )
     @dbl_docker_image
   end
@@ -95,11 +95,49 @@ module Helper
     @dbl_logger ||= logger
   end
 
+  def dbl_docker_api_image
+    return @dbl_docker_api_image unless @dbl_docker_api_image.nil?
+    d = @dbl_docker_api_image = double(Docker::Image)
+    allow(Docker::Image).to receive(:get) do |name|
+      double(name,
+        :id => "id_#{name}"
+      )
+    end
+    d
+  end
+
+  def dbl_docker_api_container
+    return @dbl_docker_api_container unless @dbl_docker_api_container.nil?
+    allow(Docker::Container).to receive(:create) do |*create_args|
+      name = create_args.first['name'] || 'unknown'
+      c = instance_double(
+        Docker::Container,
+        :id => name
+      )
+      allow(c).to receive(:start) do |*start_args|
+        @docker_api_containers[name][:start_args] = start_args
+      end
+      @docker_api_containers = {} if @docker_api_containers.nil?
+      @docker_api_containers[name] = {
+        :object => c,
+        :create_args => create_args,
+      }
+      c
+    end
+  end
+
+  def mock_docker_api
+    dbl_docker_api_image
+    dbl_docker_api_container
+  end
+
   def mock_users
     allow(Etc).to receive(:getpwnam) do |user|
-      uid = @users.select do |key, value|
+      result = @users.select do |key, value|
         value == user
-      end.first.first.to_i
+      end
+      raise "User #{user} not found" if result.length < 1
+      uid = result.first.first.to_i
       d = double(user)
       allow(d).to receive(:uid).and_return(uid)
       d
@@ -108,9 +146,11 @@ module Helper
 
   def mock_groups
     allow(Etc).to receive(:getgrnam) do |group|
-      gid = @groups.select do |key, value|
+      result = @groups.select do |key, value|
         value == group
-      end.first.first.to_i
+      end
+      raise "Group #{group} not found" if result.length < 1
+      gid = result.first.first.to_i
       d = double(group)
       allow(d).to receive(:gid).and_return(gid)
       d
